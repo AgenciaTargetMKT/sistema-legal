@@ -93,7 +93,7 @@ export default function ClientesPage() {
         </div>
         <Button
           onClick={handleNuevoCliente}
-          className="bg-blue-600 hover:bg-blue-700"
+          className="bg-primary-600 hover:bg-primary-700"
         >
           <Plus className="mr-2 h-4 w-4" />
           Nuevo Cliente
@@ -120,10 +120,10 @@ export default function ClientesPage() {
             <CardTitle className="text-sm font-medium">
               Personas Naturales
             </CardTitle>
-            <User className="h-4 w-4 text-blue-600" />
+            <User className="h-4 w-4 text-primary-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
+            <div className="text-2xl font-bold text-primary-600">
               {stats.personaNatural}
             </div>
             <p className="text-xs text-muted-foreground">Con DNI</p>
@@ -274,7 +274,7 @@ export default function ClientesPage() {
                       {/* Badges */}
                       <div className="flex flex-wrap gap-1.5">
                         {cliente.condicion && (
-                          <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                          <span className="inline-flex items-center rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">
                             {cliente.condicion}
                           </span>
                         )}

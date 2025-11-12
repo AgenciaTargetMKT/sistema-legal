@@ -55,9 +55,14 @@ export default function ProcesosPage() {
         `
           *,
           cliente:clientes(nombre, documento_identidad),
+          rol_cliente:rol_cliente_id(nombre),
           materia:materias(nombre),
           estado:estados_proceso(nombre, color),
-          tipo_proceso:tipos_proceso(nombre)
+          tipo_proceso:tipos_proceso(nombre),
+          empleados_asignados:proceso_empleados(
+            rol,
+            empleado:empleados(nombre, apellido)
+          )
         `
       );
 
@@ -80,9 +85,14 @@ export default function ProcesosPage() {
               `
               *,
               cliente:clientes(nombre, documento_identidad),
+              rol_cliente:rol_cliente_id(nombre),
               materia:materias(nombre),
               estado:estados_proceso(nombre, color),
-              tipo_proceso:tipos_proceso(nombre)
+              tipo_proceso:tipos_proceso(nombre),
+              empleados_asignados:proceso_empleados(
+                rol,
+                empleado:empleados(nombre, apellido)
+              )
             `
             )
             .order("created_at", { ascending: true });
@@ -141,10 +151,12 @@ export default function ProcesosPage() {
       }
     });
 
-    // Fusionar datos
+    // Fusionar datos y transformar empleados
     const procesosConActualizaciones = procesos.map((proceso) => ({
       ...proceso,
       ultima_actualizacion: comentariosPorProceso[proceso.id] || null,
+      empleados_asignados:
+        proceso.empleados_asignados?.map((pe) => pe.empleado) || [],
     }));
 
     return procesosConActualizaciones;
@@ -176,7 +188,6 @@ export default function ProcesosPage() {
       estado_id: null,
       tipo_proceso_id: null,
       fecha_inicio: new Date().toISOString().split("T")[0],
-      monto_demanda: null,
       observaciones: "",
     });
     setPanelOpen(true);
@@ -237,78 +248,9 @@ export default function ProcesosPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Procesos Legales
-          </h1>
-          <p className="text-muted-foreground">
-            Gestiona todos los procesos legales de tu estudio
-          </p>
-        </div>
-        <Button size="lg" className="gap-2" onClick={handleNuevoProceso}>
-          <Plus className="h-5 w-5" />
-          Nuevo Proceso
-        </Button>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Procesos
-            </CardTitle>
-            <Scale className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <p className="text-xs text-muted-foreground">Todos los procesos</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Activos</CardTitle>
-            <FileText className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {stats.activos}
-            </div>
-            <p className="text-xs text-muted-foreground">En curso</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Concluidos</CardTitle>
-            <FileText className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {stats.concluidos}
-            </div>
-            <p className="text-xs text-muted-foreground">Finalizados</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Con Impulso</CardTitle>
-            <FileText className="h-4 w-4 text-orange-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">
-              {stats.impulsos}
-            </div>
-            <p className="text-xs text-muted-foreground">Requieren atención</p>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Search and Filters */}
-      <Card>
+      <div>
         <CardHeader>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <CardTitle>Lista de Procesos</CardTitle>
@@ -344,8 +286,12 @@ export default function ProcesosPage() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              <Button variant="outline" size="icon">
-                <Filter className="h-4 w-4" />
+              <Button variant="outline" size="icon" className="mr-2">
+                <Filter className="h-4 w-4 " />
+              </Button>
+              <Button size="lg" className="gap-2" onClick={handleNuevoProceso}>
+                <Plus className="h-5 w-5" />
+                Nuevo Proceso
               </Button>
             </div>
           </div>
@@ -470,7 +416,7 @@ export default function ProcesosPage() {
             </div>
           )}
         </CardContent>
-      </Card>
+      </div>
 
       {/* Panel de Información del Proceso */}
       <ProcesoPanel

@@ -5,11 +5,26 @@ import { supabase } from "@/lib/supabase";
 import ContentEditable from "react-contenteditable";
 import { createPortal } from "react-dom";
 import { usePopper } from "react-popper";
+import { motion, AnimatePresence } from "framer-motion";
+import Select from "react-select";
+import toast from "react-hot-toast";
 import { X, Calendar, User, FileText, Clock, AlertCircle } from "lucide-react";
 import clsx from "clsx";
 
 export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
   const [loading, setLoading] = useState(false);
+  const [tareaLocal, setTareaLocal] = useState(
+    tarea || {
+      nombre: "",
+      titulo: "",
+      descripcion: "",
+      prioridad: "media",
+      fecha_vencimiento: null,
+      proceso_id: null,
+      estado_id: null,
+      empleado_asignado_id: null,
+    }
+  );
 
   // Catálogos
   const [procesos, setProcesos] = useState([]);
@@ -17,18 +32,53 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
   const [empleados, setEmpleados] = useState([]);
 
   useEffect(() => {
-    if (isOpen && tarea) {
+    if (isOpen) {
       cargarCatalogos();
+      setTareaLocal(
+        tarea || {
+          nombre: "",
+          titulo: "",
+          descripcion: "",
+          prioridad: "media",
+          fecha_vencimiento: null,
+          proceso_id: null,
+          estado_id: null,
+          empleado_asignado_id: null,
+        }
+      );
     }
   }, [isOpen, tarea]);
+
+  // Suscripción en tiempo real para actualizar el panel cuando cambie la tarea
+  useEffect(() => {
+    if (!tarea?.id || !isOpen) return;
+
+    const channel = supabase
+      .channel(`tarea-${tarea.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "tareas",
+          filter: `id=eq.${tarea.id}`,
+        },
+        (payload) => {
+          console.log("Tarea actualizada en tiempo real:", payload);
+          setTareaLocal((prev) => ({ ...prev, ...payload.new }));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [tarea?.id, isOpen]);
 
   const cargarCatalogos = async () => {
     try {
       const [procesosRes, estadosRes, empleadosRes] = await Promise.all([
-        supabase
-          .from("procesos")
-          .select("id, nombre, numero_proceso")
-          .order("nombre"),
+        supabase.from("procesos").select("id, nombre").order("nombre"),
         supabase
           .from("estados_tarea")
           .select("id, nombre, color")
@@ -50,44 +100,33 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
 
   const actualizarCampo = async (campo, valor) => {
     try {
-      // Si no hay ID, crear nueva tarea
+      // Si no hay ID, es modo creación - actualizar localmente
       if (!tarea?.id) {
-        // Obtener el usuario actual
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        console.log(
+          "Modo creación - campo actualizado localmente:",
+          campo,
+          valor
+        );
 
-        const nuevaTarea = {
-          nombre: tarea.nombre || "Nueva tarea",
-          descripcion: tarea.descripcion || "",
-          proceso_id: tarea.proceso_id,
-          estado_id: tarea.estado_id,
-          prioridad: tarea.prioridad || "media",
-          empleado_asignado_id: tarea.empleado_asignado_id || user?.id,
-          fecha_limite: tarea.fecha_limite,
-          fecha_vencimiento: tarea.fecha_vencimiento,
-          fecha_completada: tarea.fecha_completada,
-          tiempo_estimado: tarea.tiempo_estimado,
-          tiempo_real: tarea.tiempo_real,
-          observaciones: tarea.observaciones || "",
-          [campo]: valor, // Actualizar el campo que se está editando
-        };
+        // Actualizar el campo y buscar el objeto completo si es una relación
+        const updates = { [campo]: valor };
 
-        const { data, error } = await supabase
-          .from("tareas")
-          .insert([nuevaTarea])
-          .select()
-          .single();
+        if (campo === "proceso_id" && valor) {
+          const proceso = procesos.find((p) => p.id === valor);
+          if (proceso) updates.proceso = proceso;
+        } else if (campo === "estado_id" && valor) {
+          const estado = estados.find((e) => e.id === valor);
+          if (estado) updates.estado = estado;
+        } else if (campo === "empleado_asignado_id" && valor) {
+          const empleado = empleados.find((e) => e.id === valor);
+          if (empleado) updates.empleado_asignado = empleado;
+        }
 
-        if (error) throw error;
-
-        // Actualizar el tarea con el nuevo ID
-        tarea.id = data.id;
-        onUpdate?.();
+        setTareaLocal((prev) => ({ ...prev, ...updates }));
         return;
       }
 
-      // Actualizar tarea existente
+      // Actualizar tarea existente (modo edición)
       const { error } = await supabase
         .from("tareas")
         .update({ [campo]: valor })
@@ -98,7 +137,48 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
       onUpdate?.();
     } catch (error) {
       console.error("Error actualizando:", error);
-      alert("Error al actualizar: " + error.message);
+      toast.error("Error al actualizar: " + error.message);
+    }
+  };
+
+  const guardarNuevaTarea = async () => {
+    try {
+      if (!tareaLocal?.titulo && !tareaLocal?.nombre) {
+        toast.error("Por favor completa al menos el título de la tarea");
+        return;
+      }
+
+      // Obtener el usuario actual
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const nuevaTarea = {
+        nombre: tareaLocal.titulo || tareaLocal.nombre,
+        descripcion: tareaLocal.descripcion || "",
+        proceso_id: tareaLocal.proceso_id || null,
+        estado_id: tareaLocal.estado_id || null,
+        prioridad: tareaLocal.prioridad || "media",
+        empleado_asignado_id: tareaLocal.empleado_asignado_id || user?.id,
+        fecha_limite: tareaLocal.fecha_limite || null,
+        fecha_vencimiento: tareaLocal.fecha_vencimiento || null,
+        observaciones: tareaLocal.observaciones || "",
+      };
+
+      const { data, error } = await supabase
+        .from("tareas")
+        .insert([nuevaTarea])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast.success("Tarea creada exitosamente");
+      onUpdate?.();
+      onClose();
+    } catch (error) {
+      console.error("Error creando tarea:", error);
+      toast.error("Error al crear tarea: " + error.message);
     }
   };
 
@@ -117,238 +197,278 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
 
   return (
     <>
-      {/* Overlay */}
-      <div
-        onClick={onClose}
-        className="fixed inset-0 bg-black/40 z-[9998] transition-opacity backdrop-blur-[2px]"
-      />
-
-      {/* Panel */}
-      <div className="fixed right-0 top-0 h-full w-[1200px] bg-white shadow-2xl z-[9999] overflow-y-auto">
-        {/* Header fijo */}
-        <div className="sticky top-0 bg-white border-b px-8 py-5 flex items-center justify-between z-[10000]">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">
-              {tarea.titulo || tarea.nombre}
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Tarea ID: {tarea.id?.substring(0, 8)}...
-            </p>
-          </div>
-          <button
+      {/* Overlay con animación */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <X className="w-6 h-6 text-gray-500" />
-          </button>
-        </div>
+            className="fixed inset-0 bg-black/40 z-[10998] transition-opacity backdrop-blur-[2px]"
+          />
+        )}
+      </AnimatePresence>
 
-        {/* Contenido */}
-        <div className="p-8">
-          <div className="grid grid-cols-2 gap-8">
-            {/* Columna Izquierda */}
-            <div className="space-y-6">
-              {/* Información Principal */}
-              <section>
-                <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Información Principal
-                </h3>
-                <div className="space-y-3">
-                  <EditableText
-                    label="Título"
-                    value={tarea.titulo || tarea.nombre}
-                    onUpdate={(val) =>
-                      actualizarCampo(tarea.titulo ? "titulo" : "nombre", val)
-                    }
+      {/* Panel con animación slide */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="fixed right-0 top-0 h-full w-[680px] bg-white shadow-2xl z-[10999] overflow-y-auto"
+          >
+            {/* Header minimalista */}
+            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-[10000]">
+              <div className="flex-1 min-w-0 mr-4">
+                {!tarea?.id ? (
+                  <input
+                    type="text"
+                    value={tareaLocal?.titulo || tareaLocal?.nombre || ""}
+                    onChange={(e) => actualizarCampo("titulo", e.target.value)}
+                    placeholder="Título de la tarea..."
+                    className="text-xl font-semibold text-gray-900 bg-transparent border-b-2 border-primary-400 outline-none w-full focus:border-primary-600 rounded-lg px-2"
+                    autoFocus
                   />
-                  <EditableText
-                    label="Descripción"
-                    value={tarea.descripcion}
-                    onUpdate={(val) => actualizarCampo("descripcion", val)}
-                    multiline
-                  />
-                  <EditableSelect
-                    label="Proceso"
+                ) : (
+                  <h2 className="text-xl font-semibold text-gray-900 truncate">
+                    {tareaLocal?.nombre ||
+                      tareaLocal?.titulo ||
+                      "Tarea sin título"}
+                  </h2>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {!tarea?.id && (
+                  <button
+                    onClick={guardarNuevaTarea}
+                    className="px-4 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded transition-colors"
+                  >
+                    Guardar Tarea
+                  </button>
+                )}
+                <button
+                  onClick={onClose}
+                  className="p-1.5 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+            </div>
+
+            {/* Contenido compacto */}
+            <div className="px-6 py-4 space-y-0">
+              {/* Propiedades en formato Notion */}
+              <PropertyRow
+                icon={<FileText className="w-3.5 h-3.5" />}
+                label="Proceso"
+              >
+                <div className="flex-1">
+                  <Select
                     value={
-                      tarea.proceso
-                        ? `${tarea.proceso.numero_proceso} - ${tarea.proceso.nombre}`
-                        : ""
+                      tareaLocal?.proceso_id
+                        ? {
+                            value: tareaLocal.proceso_id,
+                            label: tareaLocal?.proceso
+                              ? tareaLocal.proceso.nombre
+                              : procesos.find(
+                                  (p) => p.id === tareaLocal.proceso_id
+                                )
+                              ? procesos.find(
+                                  (p) => p.id === tareaLocal.proceso_id
+                                ).nombre
+                              : "Proceso seleccionado",
+                          }
+                        : null
                     }
                     options={procesos.map((p) => ({
-                      id: p.id,
-                      nombre: `${p.numero_proceso} - ${p.nombre}`,
+                      value: p.id,
+                      label: p.nombre,
                     }))}
-                    onUpdate={(id) => actualizarCampo("proceso_id", id)}
-                  />
-                  <EditableSelect
-                    label="Estado"
-                    value={tarea.estado?.nombre}
-                    options={estados}
-                    onUpdate={(id) => actualizarCampo("estado_id", id)}
-                    badge
-                  />
-                  <EditableSelect
-                    label="Prioridad"
-                    value={tarea.prioridad}
-                    options={[
-                      { id: "alta", nombre: "Alta" },
-                      { id: "media", nombre: "Media" },
-                      { id: "baja", nombre: "Baja" },
-                    ]}
-                    onUpdate={(val) => actualizarCampo("prioridad", val)}
-                    badge
-                  />
-                </div>
-              </section>
-
-              {/* Asignación */}
-              <section>
-                <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  Asignación
-                </h3>
-                <div className="space-y-3">
-                  <EditableSelect
-                    label="Empleado Asignado"
-                    value={
-                      tarea.empleado_asignado
-                        ? `${tarea.empleado_asignado.nombre} ${tarea.empleado_asignado.apellido}`
-                        : ""
+                    onChange={(option) =>
+                      actualizarCampo("proceso_id", option?.value || null)
                     }
-                    options={empleados.map((e) => ({
-                      id: e.id,
-                      nombre: `${e.nombre} ${e.apellido}`,
-                    }))}
-                    onUpdate={(id) =>
-                      actualizarCampo("empleado_asignado_id", id)
-                    }
+                    placeholder="Buscar proceso..."
+                    isClearable
+                    isSearchable
+                    noOptionsMessage={() => "No se encontraron procesos"}
+                    styles={{
+                      control: (base) => ({
+                        ...base,
+                        minHeight: "32px",
+                        fontSize: "14px",
+                        borderColor: "#e5e7eb",
+                      }),
+                      menu: (base) => ({
+                        ...base,
+                        zIndex: 11002,
+                      }),
+                    }}
                   />
                 </div>
-              </section>
+              </PropertyRow>
 
-              {/* Fechas */}
-              <section>
-                <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
-                  Fechas
-                </h3>
-                <div className="space-y-3">
-                  <EditableDate
-                    label="Fecha Límite"
-                    value={tarea.fecha_limite}
-                    onUpdate={(val) => actualizarCampo("fecha_limite", val)}
-                  />
-                  <EditableDate
-                    label="Fecha Vencimiento"
-                    value={tarea.fecha_vencimiento}
-                    onUpdate={(val) =>
-                      actualizarCampo("fecha_vencimiento", val)
-                    }
-                  />
-                  <EditableDate
-                    label="Fecha Completada"
-                    value={tarea.fecha_completada}
-                    onUpdate={(val) => actualizarCampo("fecha_completada", val)}
-                  />
-                  <InfoRow
-                    label="Creada"
-                    value={formatearFecha(tarea.created_at)}
-                  />
-                  <InfoRow
-                    label="Última actualización"
-                    value={formatearFecha(tarea.updated_at)}
-                  />
-                </div>
-              </section>
+              <PropertyRow
+                icon={<AlertCircle className="w-3.5 h-3.5" />}
+                label="Estado"
+              >
+                <EditableSelect
+                  value={
+                    tareaLocal?.estado?.nombre ||
+                    estados.find((e) => e.id === tareaLocal?.estado_id)
+                      ?.nombre ||
+                    ""
+                  }
+                  options={estados}
+                  onUpdate={(id) => actualizarCampo("estado_id", id)}
+                  badge
+                  compact
+                />
+              </PropertyRow>
 
-              {/* Tiempo */}
-              <section>
-                <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                  <Clock className="w-4 h-4" />
-                  Gestión de Tiempo
-                </h3>
-                <div className="space-y-3">
-                  <EditableNumber
-                    label="Tiempo Estimado (horas)"
-                    value={tarea.tiempo_estimado}
-                    onUpdate={(val) => actualizarCampo("tiempo_estimado", val)}
-                  />
-                  <EditableNumber
-                    label="Tiempo Real (horas)"
-                    value={tarea.tiempo_real}
-                    onUpdate={(val) => actualizarCampo("tiempo_real", val)}
-                  />
-                </div>
-              </section>
-            </div>
+              <PropertyRow
+                icon={<User className="w-3.5 h-3.5" />}
+                label="Asignado"
+              >
+                <EditableSelect
+                  value={
+                    tareaLocal?.empleado_asignado
+                      ? `${tareaLocal.empleado_asignado.nombre} ${tareaLocal.empleado_asignado.apellido}`
+                      : tareaLocal?.empleado_asignado_id
+                      ? (() => {
+                          const emp = empleados.find(
+                            (e) => e.id === tareaLocal.empleado_asignado_id
+                          );
+                          return emp
+                            ? `${emp.nombre} ${emp.apellido}`
+                            : "Empleado seleccionado";
+                        })()
+                      : ""
+                  }
+                  options={empleados.map((e) => ({
+                    id: e.id,
+                    nombre: `${e.nombre} ${e.apellido}`,
+                  }))}
+                  onUpdate={(id) => actualizarCampo("empleado_asignado_id", id)}
+                  compact
+                />
+              </PropertyRow>
 
-            {/* Columna Derecha */}
-            <div className="space-y-6">
-              {/* Observaciones */}
-              <section>
-                <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4" />
-                  Observaciones
-                </h3>
+              <PropertyRow
+                icon={<AlertCircle className="w-3.5 h-3.5" />}
+                label="Prioridad"
+              >
+                <EditableSelect
+                  value={tareaLocal.prioridad}
+                  options={[
+                    { id: "alta", nombre: "Alta" },
+                    { id: "media", nombre: "Media" },
+                    { id: "baja", nombre: "Baja" },
+                  ]}
+                  onUpdate={(val) => actualizarCampo("prioridad", val)}
+                  badge
+                  compact
+                />
+              </PropertyRow>
+
+              <PropertyRow
+                icon={<Calendar className="w-3.5 h-3.5" />}
+                label="Recordatorio"
+              >
+                <EditableDateWithTime
+                  value={tareaLocal.fecha_limite}
+                  onUpdate={(val) => actualizarCampo("fecha_limite", val)}
+                  compact
+                />
+              </PropertyRow>
+
+              <PropertyRow
+                icon={<Calendar className="w-3.5 h-3.5" />}
+                label="Vencimiento"
+              >
+                <EditableDate
+                  value={tareaLocal.fecha_vencimiento}
+                  onUpdate={(val) => actualizarCampo("fecha_vencimiento", val)}
+                  compact
+                />
+              </PropertyRow>
+
+              {tarea.fecha_completada && (
+                <PropertyRow
+                  icon={<Calendar className="w-3.5 h-3.5" />}
+                  label="Completada"
+                >
+                  <span className="text-sm text-gray-700">
+                    {formatearFecha(tarea.fecha_completada)}
+                  </span>
+                </PropertyRow>
+              )}
+
+              {/* Divisor */}
+              <div className="border-t my-4"></div>
+
+              {/* Descripción */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Descripción
+                </label>
                 <EditableText
-                  label="Observaciones"
-                  value={tarea.observaciones}
+                  value={tareaLocal.descripcion}
+                  onUpdate={(val) => actualizarCampo("descripcion", val)}
+                  multiline
+                  placeholder="Agregar descripción..."
+                />
+              </div>
+
+              {/* Observaciones */}
+              <div className="space-y-2 mt-4">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Observaciones
+                </label>
+                <EditableText
+                  value={tareaLocal.observaciones}
                   onUpdate={(val) => actualizarCampo("observaciones", val)}
                   multiline
+                  placeholder="Agregar observaciones..."
                 />
-              </section>
+              </div>
 
-              {/* Información Adicional */}
-              <section>
-                <h3 className="text-sm font-semibold text-gray-700 mb-4">
-                  Información del Sistema
-                </h3>
-                <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">ID:</span>
-                    <span className="font-mono text-gray-900">
-                      {tarea.id?.substring(0, 13)}...
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Estado:</span>
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        tarea.activo
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-800"
-                      }`}
-                    >
-                      {tarea.activo ? "Activo" : "Inactivo"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Orden:</span>
-                    <span className="text-gray-900">{tarea.orden}</span>
-                  </div>
+              {/* Metadatos al final */}
+              <div className="mt-6 pt-4 border-t space-y-1 text-xs text-gray-500">
+                <div className="flex justify-between">
+                  <span>Creada</span>
+                  <span>{formatearFecha(tarea.created_at)}</span>
                 </div>
-              </section>
+                <div className="flex justify-between">
+                  <span>Actualizada</span>
+                  <span>{formatearFecha(tarea.updated_at)}</span>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
 
-// Componente InfoRow (solo lectura)
-function InfoRow({ label, value }) {
+// Componente PropertyRow estilo Notion
+function PropertyRow({ icon, label, children }) {
   return (
-    <div className="flex items-center justify-between py-2 border-b border-gray-100">
-      <span className="text-sm text-gray-600">{label}</span>
-      <span className="text-sm text-gray-900">{value}</span>
+    <div className="flex items-center py-1.5 hover:bg-gray-50 group">
+      <div className="flex items-center gap-2 w-[140px] flex-shrink-0">
+        <span className="text-gray-400">{icon}</span>
+        <span className="text-xs text-gray-600 font-medium">{label}</span>
+      </div>
+      <div className="flex-1 min-w-0">{children}</div>
     </div>
   );
 }
 
-// Componente de texto editable
-function EditableText({ label, value, onUpdate, multiline = false }) {
+// Componente de texto editable compacto
+function EditableText({ value, onUpdate, multiline = false, placeholder }) {
   const [editing, setEditing] = useState(false);
   const [currentValue, setCurrentValue] = useState(value || "");
   const contentRef = useRef();
@@ -359,24 +479,22 @@ function EditableText({ label, value, onUpdate, multiline = false }) {
 
   useEffect(() => {
     if (editing && contentRef.current) {
-      contentRef.current.focus();
+      const range = document.createRange();
+      const sel = window.getSelection();
 
-      const handleKeyDown = (e) => {
-        if (e.key === "Enter" && !e.shiftKey && !multiline) {
-          e.preventDefault();
-          handleSave();
-        }
-        if (e.key === "Escape") {
-          e.preventDefault();
-          setCurrentValue(value || "");
-          setEditing(false);
-        }
-      };
-
-      contentRef.current.addEventListener("keydown", handleKeyDown);
-      return () => {
-        contentRef.current?.removeEventListener("keydown", handleKeyDown);
-      };
+      if (multiline) {
+        contentRef.current.focus();
+        range.selectNodeContents(contentRef.current);
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else {
+        contentRef.current.focus();
+        range.selectNodeContents(contentRef.current);
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
     }
   }, [editing, value, multiline]);
 
@@ -388,91 +506,53 @@ function EditableText({ label, value, onUpdate, multiline = false }) {
   };
 
   return (
-    <div className="flex items-start justify-between py-2 border-b border-gray-100">
-      <span className="text-sm text-gray-600 pt-1">{label}</span>
-      <div className="flex-1 max-w-md ml-4">
-        {editing ? (
-          <ContentEditable
-            innerRef={contentRef}
-            html={currentValue}
-            onChange={(e) => setCurrentValue(e.target.value)}
-            onBlur={handleSave}
-            className={clsx(
-              "w-full px-3 py-2 text-sm border rounded-lg outline-none bg-blue-50 ring-2 ring-blue-400",
-              multiline ? "min-h-[100px]" : ""
-            )}
-            tagName={multiline ? "div" : "span"}
-          />
-        ) : (
-          <div
-            onClick={() => setEditing(true)}
-            className={clsx(
-              "w-full px-3 py-2 text-sm rounded-lg hover:bg-gray-100 cursor-pointer transition-colors",
-              multiline ? "min-h-[100px] whitespace-pre-wrap" : ""
-            )}
-          >
-            {currentValue || (
-              <span className="text-gray-400">Click para editar</span>
-            )}
-          </div>
-        )}
-      </div>
+    <div className="w-full">
+      {editing ? (
+        <ContentEditable
+          innerRef={contentRef}
+          html={currentValue}
+          onChange={(e) => setCurrentValue(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !multiline) {
+              e.preventDefault();
+              handleSave();
+            }
+            if (e.key === "Escape") {
+              setCurrentValue(value || "");
+              setEditing(false);
+            }
+          }}
+          className={clsx(
+            "w-full px-2 py-1 text-sm border-2 border-primary-400 rounded outline-none bg-primary-50",
+            multiline ? "min-h-[100px]" : ""
+          )}
+          tagName={multiline ? "div" : "span"}
+        />
+      ) : (
+        <div
+          onClick={() => setEditing(true)}
+          className={clsx(
+            "w-full px-2 py-1 text-sm rounded hover:bg-gray-100 cursor-pointer transition-colors",
+            multiline ? "min-h-[100px] whitespace-pre-wrap" : "",
+            !currentValue && "text-gray-400"
+          )}
+        >
+          {currentValue || placeholder || "Vacío"}
+        </div>
+      )}
     </div>
   );
 }
 
-// Componente de número editable
-function EditableNumber({ label, value, onUpdate }) {
-  const [editing, setEditing] = useState(false);
-  const [currentValue, setCurrentValue] = useState(value || "");
-
-  useEffect(() => {
-    setCurrentValue(value || "");
-  }, [value]);
-
-  const handleSave = () => {
-    setEditing(false);
-    const numValue = parseInt(currentValue) || null;
-    if (numValue !== value) {
-      onUpdate(numValue);
-    }
-  };
-
-  return (
-    <div className="flex items-center justify-between py-2 border-b border-gray-100">
-      <span className="text-sm text-gray-600">{label}</span>
-      <div className="flex-1 max-w-[150px] ml-4">
-        {editing ? (
-          <input
-            type="number"
-            value={currentValue}
-            onChange={(e) => setCurrentValue(e.target.value)}
-            onBlur={handleSave}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSave();
-              if (e.key === "Escape") {
-                setCurrentValue(value || "");
-                setEditing(false);
-              }
-            }}
-            autoFocus
-            className="w-full px-3 py-2 text-sm border rounded-lg bg-blue-50 ring-2 ring-blue-400 outline-none"
-          />
-        ) : (
-          <div
-            onClick={() => setEditing(true)}
-            className="w-full px-3 py-2 text-sm rounded-lg hover:bg-gray-100 cursor-pointer transition-colors text-right"
-          >
-            {currentValue || <span className="text-gray-400">-</span>}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Componente de select editable
-function EditableSelect({ label, value, options, onUpdate, badge = false }) {
+// Componente de select editable compacto
+function EditableSelect({
+  value,
+  options,
+  onUpdate,
+  badge = false,
+  compact = false,
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [referenceElement, setReferenceElement] = useState(null);
   const [popperElement, setPopperElement] = useState(null);
@@ -515,91 +595,92 @@ function EditableSelect({ label, value, options, onUpdate, badge = false }) {
   );
 
   return (
-    <div className="flex items-center justify-between py-2 border-b border-gray-100">
-      <span className="text-sm text-gray-600">{label}</span>
-      <div className="flex-1 max-w-md ml-4">
-        <div
-          ref={setReferenceElement}
-          onClick={() => setIsOpen(!isOpen)}
-          className={clsx(
-            "w-full px-3 py-2 text-sm rounded-lg cursor-pointer transition-all",
-            isOpen ? "bg-blue-50 ring-2 ring-blue-400" : "hover:bg-gray-100"
-          )}
-        >
-          {badge && value ? (
-            <span
-              className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
-              style={{
-                backgroundColor:
-                  label === "Prioridad"
-                    ? `${getPrioridadColor(value)}20`
-                    : selectedOption?.color
-                    ? `${selectedOption.color}20`
-                    : "#E5E7EB",
-                color:
-                  label === "Prioridad"
-                    ? getPrioridadColor(value)
-                    : selectedOption?.color || "#6B7280",
-              }}
-            >
-              {value}
-            </span>
-          ) : (
-            <span className={value ? "text-gray-900" : "text-gray-400"}>
-              {value || "Seleccionar"}
-            </span>
-          )}
-        </div>
-
-        {isOpen &&
-          typeof document !== "undefined" &&
-          createPortal(
-            <div
-              ref={setPopperElement}
-              style={styles.popper}
-              {...attributes.popper}
-              className="z-[10001] bg-white border-2 border-blue-400 shadow-xl rounded-lg py-1 min-w-[250px] max-h-[300px] overflow-auto"
-            >
-              {options.map((option) => (
-                <button
-                  key={option.id}
-                  onClick={() => {
-                    onUpdate(option.id);
-                    setIsOpen(false);
-                  }}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors"
-                >
-                  {badge && (option.color || label === "Prioridad") ? (
-                    <span
-                      className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
-                      style={{
-                        backgroundColor:
-                          label === "Prioridad"
-                            ? `${getPrioridadColor(option.id)}20`
-                            : `${option.color}20`,
-                        color:
-                          label === "Prioridad"
-                            ? getPrioridadColor(option.id)
-                            : option.color,
-                      }}
-                    >
-                      {option.nombre}
-                    </span>
-                  ) : (
-                    option.nombre
-                  )}
-                </button>
-              ))}
-            </div>,
-            document.body
-          )}
+    <div className="w-full">
+      <div
+        ref={setReferenceElement}
+        onClick={() => setIsOpen(!isOpen)}
+        className={clsx(
+          "w-full px-2 py-1 text-sm rounded-lg cursor-pointer transition-all",
+          isOpen ? "bg-primary-50 ring-2 ring-primary-400" : "hover:bg-gray-100"
+        )}
+      >
+        {badge && value ? (
+          <span
+            className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-medium"
+            style={{
+              backgroundColor:
+                value === "alta" || value === "media" || value === "baja"
+                  ? `${getPrioridadColor(value)}20`
+                  : selectedOption?.color
+                  ? `${selectedOption.color}20`
+                  : "#E5E7EB",
+              color:
+                value === "alta" || value === "media" || value === "baja"
+                  ? getPrioridadColor(value)
+                  : selectedOption?.color || "#6B7280",
+            }}
+          >
+            {value}
+          </span>
+        ) : (
+          <span className={value ? "text-gray-900" : "text-gray-400"}>
+            {value || "Seleccionar"}
+          </span>
+        )}
       </div>
+
+      {isOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={setPopperElement}
+            style={styles.popper}
+            {...attributes.popper}
+            className="z-[11001] bg-white border-2 border-primary-400 shadow-xl rounded-lg py-1 min-w-[200px] max-h-[300px] overflow-auto"
+          >
+            {options.map((option) => (
+              <button
+                key={option.id}
+                onClick={() => {
+                  onUpdate(option.id);
+                  setIsOpen(false);
+                }}
+                className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-50 transition-colors"
+              >
+                {badge && (option.color || option.id === value) ? (
+                  <span
+                    className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                    style={{
+                      backgroundColor:
+                        option.id === "alta" ||
+                        option.id === "media" ||
+                        option.id === "baja"
+                          ? `${getPrioridadColor(option.id)}20`
+                          : `${option.color}20`,
+                      color:
+                        option.id === "alta" ||
+                        option.id === "media" ||
+                        option.id === "baja"
+                          ? getPrioridadColor(option.id)
+                          : option.color,
+                    }}
+                  >
+                    {option.nombre}
+                  </span>
+                ) : (
+                  option.nombre
+                )}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
 
-// Componente de fecha editable
-function EditableDate({ label, value, onUpdate }) {
+// Componente de fecha editable compacto
+function EditableDate({ value, onUpdate, compact = false }) {
   const [editing, setEditing] = useState(false);
   const [currentValue, setCurrentValue] = useState(value || "");
 
@@ -608,10 +689,10 @@ function EditableDate({ label, value, onUpdate }) {
   }, [value]);
 
   const formatearFecha = (fecha) => {
-    if (!fecha) return "-";
+    if (!fecha) return null;
     return new Date(fecha).toLocaleDateString("es-ES", {
       year: "numeric",
-      month: "long",
+      month: "short",
       day: "numeric",
     });
   };
@@ -619,39 +700,111 @@ function EditableDate({ label, value, onUpdate }) {
   const handleSave = () => {
     setEditing(false);
     if (currentValue !== value) {
-      onUpdate(currentValue || null);
+      onUpdate(currentValue);
     }
   };
 
   return (
-    <div className="flex items-center justify-between py-2 border-b border-gray-100">
-      <span className="text-sm text-gray-600">{label}</span>
-      <div className="flex-1 max-w-[200px] ml-4">
-        {editing ? (
+    <div className="w-full">
+      {editing ? (
+        <input
+          type="date"
+          value={currentValue ? currentValue.split("T")[0] : ""}
+          onChange={(e) => setCurrentValue(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleSave();
+            if (e.key === "Escape") {
+              setCurrentValue(value || "");
+              setEditing(false);
+            }
+          }}
+          autoFocus
+          className="w-full px-2 py-1 text-sm border-2 border-primary-400 rounded bg-primary-50 outline-none"
+        />
+      ) : (
+        <div
+          onClick={() => setEditing(true)}
+          className="w-full px-2 py-1 text-sm rounded hover:bg-gray-100 cursor-pointer transition-colors"
+        >
+          <span className={value ? "text-gray-900" : "text-gray-400"}>
+            {value ? formatearFecha(value) : "Sin fecha"}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Componente de fecha con hora editable
+function EditableDateWithTime({ value, onUpdate, compact = false }) {
+  const [editing, setEditing] = useState(false);
+  const [currentDate, setCurrentDate] = useState("");
+  const [currentTime, setCurrentTime] = useState("");
+
+  useEffect(() => {
+    if (value) {
+      const date = new Date(value);
+      setCurrentDate(date.toISOString().split("T")[0]);
+      setCurrentTime(
+        date.toTimeString().split(" ")[0].substring(0, 5) || "00:00"
+      );
+    } else {
+      setCurrentDate("");
+      setCurrentTime("00:00");
+    }
+  }, [value]);
+
+  const formatearFecha = (fecha) => {
+    if (!fecha) return null;
+    return new Date(fecha).toLocaleString("es-ES", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const handleSave = () => {
+    setEditing(false);
+    if (currentDate) {
+      const fechaCompleta = `${currentDate}T${currentTime}:00`;
+      if (fechaCompleta !== value) {
+        onUpdate(fechaCompleta);
+      }
+    }
+  };
+
+  return (
+    <div className="w-full">
+      {editing ? (
+        <div className="flex gap-2">
           <input
             type="date"
-            value={currentValue ? currentValue.split("T")[0] : ""}
-            onChange={(e) => setCurrentValue(e.target.value)}
+            value={currentDate}
+            onChange={(e) => setCurrentDate(e.target.value)}
             onBlur={handleSave}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSave();
-              if (e.key === "Escape") {
-                setCurrentValue(value || "");
-                setEditing(false);
-              }
-            }}
-            autoFocus
-            className="w-full px-3 py-2 text-sm border rounded-lg bg-blue-50 ring-2 ring-blue-400 outline-none"
+            className="flex-1 px-2 py-1 text-sm border-2 border-primary-400 rounded bg-primary-50 outline-none"
           />
-        ) : (
-          <div
-            onClick={() => setEditing(true)}
-            className="w-full px-3 py-2 text-sm rounded-lg hover:bg-gray-100 cursor-pointer transition-colors text-right"
-          >
-            {value ? formatearFecha(value) : "-"}
-          </div>
-        )}
-      </div>
+          <input
+            type="time"
+            value={currentTime}
+            onChange={(e) => setCurrentTime(e.target.value)}
+            onBlur={handleSave}
+            className="w-24 px-2 py-1 text-sm border-2 border-primary-400 rounded bg-primary-50 outline-none"
+          />
+        </div>
+      ) : (
+        <div
+          onClick={() => setEditing(true)}
+          className="w-full px-2 py-1 text-sm rounded hover:bg-gray-100 cursor-pointer transition-colors"
+        >
+          <span className={value ? "text-gray-900" : "text-gray-400"}>
+            {value ? formatearFecha(value) : "Sin fecha"}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

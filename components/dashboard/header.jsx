@@ -1,11 +1,25 @@
 "use client";
 
 import { memo } from "react";
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Menu, Bell, Search } from "lucide-react";
 
 const HeaderComponent = ({ onMenuClick, empleado }) => {
+  const pathname = usePathname();
+
+  // Mapeo de rutas a títulos
+  const getTitleFromPath = () => {
+    if (pathname.includes("/dashboard")) return "Dashboard";
+    if (pathname.includes("/procesos")) return "Procesos Legales";
+    if (pathname.includes("/clientes")) return "Clientes";
+    if (pathname.includes("/tareas")) return "Tareas";
+    if (pathname.includes("/impulsos")) return "Impulsos";
+    if (pathname.includes("/empleados")) return "Empleados";
+    return "Sistema Legal";
+  };
+
   const displayName = empleado
     ? `${empleado.nombre} ${empleado.apellido}`
     : "Usuario";
@@ -26,7 +40,7 @@ const HeaderComponent = ({ onMenuClick, empleado }) => {
         {/* Breadcrumb o título de página */}
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-semibold md:text-xl truncate">
-            Bienvenido, {displayName}
+            {getTitleFromPath()}
           </h2>
           <p className="text-sm text-muted-foreground hidden md:block">
             {new Date().toLocaleDateString("es-ES", {

@@ -50,7 +50,7 @@ export default function TareasPage() {
         .select(
           `
           *,
-          proceso:procesos(numero_proceso, nombre),
+          proceso:procesos(id, nombre),
           empleado_asignado:empleados(nombre, apellido),
           estado:estados_tarea(nombre, color)
         `
@@ -99,8 +99,8 @@ export default function TareasPage() {
     const searchLower = searchTerm.toLowerCase();
     const matchSearch =
       tarea.titulo?.toLowerCase().includes(searchLower) ||
-      tarea.proceso?.numero_proceso?.toLowerCase().includes(searchLower) ||
-      tarea.proceso?.nombre?.toLowerCase().includes(searchLower);
+      tarea.proceso?.nombre?.toLowerCase().includes(searchLower) ||
+      tarea.empleado_asignado?.nombre?.toLowerCase().includes(searchLower);
 
     const matchEstado =
       filtroEstado === "todos" ||
@@ -193,77 +193,10 @@ export default function TareasPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Tareas</CardTitle>
-            <CheckSquare className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <p className="text-xs text-muted-foreground">Todas las tareas</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
-            <Circle className="h-4 w-4 text-gray-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-600">
-              {stats.pendientes}
-            </div>
-            <p className="text-xs text-muted-foreground">Sin iniciar</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">En Proceso</CardTitle>
-            <Clock className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {stats.enProceso}
-            </div>
-            <p className="text-xs text-muted-foreground">En progreso</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completadas</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {stats.completadas}
-            </div>
-            <p className="text-xs text-muted-foreground">Finalizadas</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Vencidas</CardTitle>
-            <AlertCircle className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {stats.vencidas}
-            </div>
-            <p className="text-xs text-muted-foreground">Requieren atención</p>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Search and Filters */}
-      <Card>
+      <div>
         <CardHeader>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <CardTitle>Lista de Tareas</CardTitle>
             <div className="flex gap-2">
               <div className="relative flex-1 md:w-80">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -377,7 +310,7 @@ export default function TareasPage() {
                             {tarea.proceso && (
                               <div className="flex items-center gap-1.5">
                                 <FileText className="h-3.5 w-3.5" />
-                                <span>{tarea.proceso.numero_proceso}</span>
+                                <span>{tarea.proceso.nombre}</span>
                               </div>
                             )}
                             {tarea.empleado_asignado && (
@@ -453,7 +386,7 @@ export default function TareasPage() {
             </div>
           )}
         </CardContent>
-      </Card>
+      </div>
 
       <TareaDialog
         open={dialogOpen}

@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase";
 import ContentEditable from "react-contenteditable";
 import { createPortal } from "react-dom";
 import { usePopper } from "react-popper";
+import { motion, AnimatePresence } from "framer-motion";
+import toast from "react-hot-toast";
 import {
   X,
   Calendar,
@@ -13,10 +15,13 @@ import {
   MessageSquare,
   Plus,
   Clock,
+  CheckCircle2,
+  Circle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import clsx from "clsx";
+import TareaPanel from "./TareaPanel";
 
 export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
   const [comentarios, setComentarios] = useState([]);
@@ -25,6 +30,9 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
   const [procesosEmpleados, setProcesosEmpleados] = useState([]);
   const [loading, setLoading] = useState(false);
   const [tareas, setTareas] = useState([]);
+  const [tareaPanelOpen, setTareaPanelOpen] = useState(false);
+  const [tareaSeleccionada, setTareaSeleccionada] = useState(null);
+  const [procesoLocal, setProcesoLocal] = useState(proceso);
   const [nuevaTarea, setNuevaTarea] = useState({
     titulo: "",
     descripcion: "",
@@ -35,17 +43,35 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
   const [estados, setEstados] = useState([]);
   const [materias, setMaterias] = useState([]);
   const [tiposProceso, setTiposProceso] = useState([]);
+  const [rolesCliente, setRolesCliente] = useState([]);
 
   useEffect(() => {
     if (isOpen && proceso) {
       cargarDatos();
       cargarCatalogos();
+
+      // Limpiar HTML de campos de texto
+      const cleanHTML = (text) => {
+        if (!text) return text;
+        const temp = document.createElement("div");
+        temp.innerHTML = text;
+        return temp.textContent || temp.innerText || "";
+      };
+
+      const cleanedProceso = {
+        ...proceso,
+        dependencia: cleanHTML(proceso.dependencia),
+        pretensiones: cleanHTML(proceso.pretensiones),
+        ultima_actuacion_esperada: cleanHTML(proceso.ultima_actuacion_esperada),
+      };
+
+      setProcesoLocal(cleanedProceso);
     }
   }, [isOpen, proceso]);
 
   const cargarCatalogos = async () => {
     try {
-      const [clientesRes, estadosRes, materiasRes, tiposRes] =
+      const [clientesRes, estadosRes, materiasRes, tiposRes, rolesRes] =
         await Promise.all([
           supabase.from("clientes").select("id, nombre").order("nombre"),
           supabase
@@ -54,12 +80,14 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
             .order("nombre"),
           supabase.from("materias").select("id, nombre").order("nombre"),
           supabase.from("tipos_proceso").select("id, nombre").order("nombre"),
+          supabase.from("roles_cliente").select("id, nombre").order("nombre"),
         ]);
 
       if (clientesRes.data) setClientes(clientesRes.data);
       if (estadosRes.data) setEstados(estadosRes.data);
       if (materiasRes.data) setMaterias(materiasRes.data);
       if (tiposRes.data) setTiposProceso(tiposRes.data);
+      if (rolesRes.data) setRolesCliente(rolesRes.data);
     } catch (error) {
       console.error("Error cargando catálogos:", error);
     }
@@ -67,37 +95,39 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
 
   const actualizarCampo = async (campo, valor) => {
     try {
-      // Si no hay ID, crear nuevo proceso
+      // Si no hay ID, es modo creación - actualizar localmente
       if (!proceso?.id) {
-        const nuevoProceso = {
-          numero_proceso: proceso.numero_proceso || "",
-          nombre: proceso.nombre || "Nuevo Proceso",
-          descripcion: proceso.descripcion || "",
-          cliente_id: proceso.cliente_id,
-          materia_id: proceso.materia_id,
-          estado_id: proceso.estado_id,
-          tipo_proceso_id: proceso.tipo_proceso_id,
-          fecha_inicio: proceso.fecha_inicio || new Date().toISOString().split("T")[0],
-          monto_demanda: proceso.monto_demanda,
-          observaciones: proceso.observaciones || "",
-          [campo]: valor, // Actualizar el campo que se está editando
-        };
+        console.log(
+          "Modo creación - campo actualizado localmente:",
+          campo,
+          valor
+        );
 
-        const { data, error } = await supabase
-          .from("procesos")
-          .insert([nuevoProceso])
-          .select()
-          .single();
+        // Actualizar el campo y buscar el objeto completo si es una relación
+        const updates = { [campo]: valor };
 
-        if (error) throw error;
+        if (campo === "cliente_id" && valor) {
+          const cliente = clientes.find((c) => c.id === valor);
+          if (cliente) updates.cliente = cliente;
+        } else if (campo === "rol_cliente_id" && valor) {
+          const rol = rolesCliente.find((r) => r.id === valor);
+          if (rol) updates.rol_cliente = rol;
+        } else if (campo === "materia_id" && valor) {
+          const materia = materias.find((m) => m.id === valor);
+          if (materia) updates.materia = materia;
+        } else if (campo === "estado_id" && valor) {
+          const estado = estados.find((e) => e.id === valor);
+          if (estado) updates.estado = estado;
+        } else if (campo === "tipo_proceso_id" && valor) {
+          const tipo = tiposProceso.find((t) => t.id === valor);
+          if (tipo) updates.tipo_proceso = tipo;
+        }
 
-        // Actualizar el proceso con el nuevo ID
-        proceso.id = data.id;
-        onUpdate?.();
+        setProcesoLocal((prev) => ({ ...prev, ...updates }));
         return;
       }
 
-      // Actualizar proceso existente
+      // Actualizar proceso existente (modo edición)
       const { error } = await supabase
         .from("procesos")
         .update({ [campo]: valor })
@@ -108,7 +138,47 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
       onUpdate?.();
     } catch (error) {
       console.error("Error actualizando:", error);
-      alert("Error al actualizar: " + error.message);
+      toast.error("Error al actualizar: " + error.message);
+    }
+  };
+
+  const guardarNuevoProceso = async () => {
+    try {
+      if (!procesoLocal?.nombre) {
+        toast.error("Por favor completa al menos el nombre del proceso");
+        return;
+      }
+
+      const nuevoProceso = {
+        nombre: procesoLocal.nombre,
+        cliente_id: procesoLocal.cliente_id || null,
+        rol_cliente_id: procesoLocal.rol_cliente_id || null,
+        materia_id: procesoLocal.materia_id || null,
+        estado_id: procesoLocal.estado_id || null,
+        tipo_proceso_id: procesoLocal.tipo_proceso_id || null,
+        contraparte: procesoLocal.contraparte || "",
+        dependencia: procesoLocal.dependencia || "",
+        pretensiones: procesoLocal.pretensiones || "",
+        lugar: procesoLocal.lugar || "",
+        ultima_actuacion_esperada: procesoLocal.ultima_actuacion_esperada || "",
+        fecha_proximo_contacto: procesoLocal.fecha_proximo_contacto || null,
+        impulso: procesoLocal.impulso || false,
+      };
+
+      const { data, error } = await supabase
+        .from("procesos")
+        .insert([nuevoProceso])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast.success("Proceso creado exitosamente");
+      onUpdate?.();
+      onClose();
+    } catch (error) {
+      console.error("Error creando proceso:", error);
+      toast.error("Error al crear proceso: " + error.message);
     }
   };
 
@@ -155,7 +225,8 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
         .select(
           `
           *,
-          empleado:empleados(nombre, apellido)
+          estado:estado_id(id, nombre, color),
+          empleado_asignado:empleado_asignado_id(id, nombre, apellido)
         `
         )
         .eq("proceso_id", proceso.id)
@@ -257,7 +328,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
       onUpdate?.();
     } catch (error) {
       console.error("Error agregando comentario:", error);
-      alert("Error al agregar comentario: " + error.message);
+      toast.error("Error al agregar comentario: " + error.message);
     }
   };
 
@@ -289,7 +360,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
       cargarDatos();
     } catch (error) {
       console.error("Error creando tarea:", error);
-      alert("Error al crear tarea: " + error.message);
+      toast.error("Error al crear tarea: " + error.message);
     }
   };
 
@@ -358,607 +429,767 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
 
   return (
     <>
-      {/* Overlay que cubre TODO incluyendo el sidebar */}
-      <div
-        className="fixed inset-0 bg-black/40 z-[9998] transition-opacity backdrop-blur-[2px]"
-        onClick={onClose}
-        style={{ left: 0, top: 0 }}
-      />
-
-      {/* Panel - Más ancho y con grid de 2 columnas */}
-      <div className="fixed right-0 top-0 h-full w-[1200px] bg-white shadow-2xl z-[9999] overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 bg-white border-b px-8 py-5 flex items-center justify-between z-[10000]">
-          <div className="flex-1">
-            <h2 className="text-2xl font-semibold text-gray-900">
-              {proceso?.nombre || "Proceso"}
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              {proceso?.numero_proceso}
-            </p>
-          </div>
-          <button
+      {/* Overlay con animación */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 z-[9998] transition-opacity backdrop-blur-[2px]"
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            style={{ left: 0, top: 0 }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Panel con animación slide */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="fixed right-0 top-0 h-full w-[1200px] bg-white shadow-2xl z-[9999] overflow-y-auto"
           >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Content - Grid de 2 columnas */}
-        <div className="p-8">
-          <div className="grid grid-cols-2 gap-8">
-            {/* Columna Izquierda */}
-            <div className="space-y-6">
-              {/* Información del Proceso */}
-              <section>
-                <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Información del Proceso
-                </h3>
-                <div className="bg-gray-50 rounded-lg p-5 space-y-4">
-                  <EditableSelect
-                    label="Cliente"
-                    value={proceso?.cliente?.nombre}
-                    options={clientes}
-                    onUpdate={(id) => actualizarCampo("cliente_id", id)}
-                  />
-                  <EditableSelect
-                    label="Materia"
-                    value={proceso?.materia?.nombre}
-                    options={materias}
-                    onUpdate={(id) => actualizarCampo("materia_id", id)}
-                  />
-                  <EditableSelect
-                    label="Estado"
-                    value={proceso?.estado?.nombre}
-                    options={estados}
-                    onUpdate={(id) => actualizarCampo("estado_id", id)}
-                    badge={true}
-                    badgeColor={proceso?.estado?.color}
-                  />
-                  <EditableSelect
-                    label="Tipo de Proceso"
-                    value={proceso?.tipo_proceso?.nombre}
-                    options={tiposProceso}
-                    onUpdate={(id) => actualizarCampo("tipo_proceso_id", id)}
-                  />
-                  <EditableText
-                    label="ROL Cliente"
-                    value={proceso?.contra_parte}
-                    onUpdate={(value) => actualizarCampo("contra_parte", value)}
-                  />
-                  <EditableText
-                    label="Dependencia"
-                    value={proceso?.dependencia}
-                    onUpdate={(value) => actualizarCampo("dependencia", value)}
-                  />
-                </div>
-              </section>
-
-              {/* Pretensiones y Observaciones */}
-              <section>
-                <h3 className="text-sm font-semibold text-gray-700 mb-4">
-                  Detalles
-                </h3>
-                <div className="bg-gray-50 rounded-lg p-5 space-y-4">
-                  <EditableText
-                    label="Pretensiones"
-                    value={proceso?.pretensiones}
-                    onUpdate={(value) => actualizarCampo("pretensiones", value)}
-                    multiline={true}
-                  />
-                  <EditableText
-                    label="Observaciones"
-                    value={proceso?.observaciones}
-                    onUpdate={(value) =>
-                      actualizarCampo("observaciones", value)
-                    }
-                    multiline={true}
-                  />
-                </div>
-              </section>
-
-              {/* Fechas */}
-              <section>
-                <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
-                  Fechas
-                </h3>
-                <div className="bg-gray-50 rounded-lg p-5 space-y-4">
-                  <EditableDate
-                    label="Fecha de Inicio"
-                    value={proceso?.fecha_inicio}
-                    onUpdate={(value) => actualizarCampo("fecha_inicio", value)}
-                  />
-                  <EditableDate
-                    label="Fecha de Conclusión"
-                    value={proceso?.fecha_conclusion}
-                    onUpdate={(value) =>
-                      actualizarCampo("fecha_conclusion", value)
-                    }
-                  />
-                  <EditableDate
-                    label="Próximo Contacto"
-                    value={proceso?.fecha_proximo_contacto}
-                    onUpdate={(value) =>
-                      actualizarCampo("fecha_proximo_contacto", value)
-                    }
-                  />
-                  <EditableDate
-                    label="Recordatorio"
-                    value={proceso?.fecha_recordatorio}
-                    onUpdate={(value) =>
-                      actualizarCampo("fecha_recordatorio", value)
-                    }
-                  />
-                </div>
-              </section>
-
-              {/* Empleados Asignados */}
-              <section>
-                <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  Empleados Asignados ({procesosEmpleados.length})
-                </h3>
-                <div className="space-y-2">
-                  {procesosEmpleados.map((pe) => (
-                    <div
-                      key={pe.id}
-                      className="bg-gray-50 rounded-lg p-4 flex items-center justify-between hover:bg-gray-100 transition-colors"
-                    >
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {pe.empleado?.nombre} {pe.empleado?.apellido}
-                        </p>
-                        {pe.rol && (
-                          <p className="text-xs text-gray-500 mt-1">{pe.rol}</p>
-                        )}
-                      </div>
-                      <span className="text-xs text-gray-400">
-                        {formatearFecha(pe.fecha_asignacion)}
-                      </span>
-                    </div>
-                  ))}
-                  {procesosEmpleados.length === 0 && (
-                    <div className="bg-gray-50 rounded-lg p-8 text-center">
-                      <p className="text-sm text-gray-400">
-                        No hay empleados asignados
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </section>
-
-              {/* Sección de Tareas */}
-              <section>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
-                    Tareas ({tareas.length})
-                  </h3>
-                </div>
-
-                {/* Formulario nueva tarea */}
-                <div className="mb-4 space-y-2 bg-blue-50 p-3 rounded-lg">
+            {/* Header */}
+            <div className="sticky top-0 bg-white border-b px-8 py-5 flex items-center justify-between z-[10000]">
+              <div className="flex-1">
+                {!proceso?.id ? (
                   <input
                     type="text"
-                    placeholder="Título de la tarea..."
-                    value={nuevaTarea.titulo}
-                    onChange={(e) =>
-                      setNuevaTarea({ ...nuevaTarea, titulo: e.target.value })
-                    }
-                    onKeyDown={(e) => {
-                      if (
-                        e.key === "Enter" &&
-                        !e.shiftKey &&
-                        nuevaTarea.titulo.trim()
-                      ) {
-                        e.preventDefault();
-                        crearTarea();
-                      }
-                    }}
-                    className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                    value={procesoLocal?.nombre || ""}
+                    onChange={(e) => actualizarCampo("nombre", e.target.value)}
+                    placeholder="Nombre del proceso..."
+                    className="text-2xl font-semibold text-gray-900 bg-transparent border-b-2 border-primary-400 outline-none w-full focus:border-primary-600"
+                    autoFocus
                   />
-                  <textarea
-                    placeholder="Descripción (opcional)..."
-                    value={nuevaTarea.descripcion}
-                    onChange={(e) =>
-                      setNuevaTarea({
-                        ...nuevaTarea,
-                        descripcion: e.target.value,
-                      })
-                    }
-                    rows={2}
-                    className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent resize-none bg-white"
-                  />
+                ) : (
+                  <h2 className="text-2xl font-semibold text-gray-900">
+                    {procesoLocal?.nombre || "Proceso sin nombre"}
+                  </h2>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {!proceso?.id && (
                   <button
-                    onClick={crearTarea}
-                    disabled={!nuevaTarea.titulo.trim()}
-                    className="w-full bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={guardarNuevoProceso}
+                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium"
                   >
-                    <Plus className="w-4 h-4" />
-                    Crear Tarea
+                    Guardar Proceso
                   </button>
-                </div>
-
-                {/* Tabla de tareas */}
-                <div className="border rounded-lg overflow-hidden">
-                  {tareas.length > 0 ? (
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">
-                            Título
-                          </th>
-                          <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">
-                            Estado
-                          </th>
-                          <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">
-                            Asignado
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {tareas.map((tarea) => (
-                          <tr key={tarea.id} className="hover:bg-gray-50">
-                            <td className="px-3 py-2">
-                              <p className="font-medium text-gray-900">
-                                {tarea.titulo}
-                              </p>
-                              {tarea.descripcion && (
-                                <p className="text-xs text-gray-500 mt-0.5">
-                                  {tarea.descripcion}
-                                </p>
-                              )}
-                            </td>
-                            <td className="px-3 py-2">
-                              <span
-                                className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                                  tarea.estado === "completada"
-                                    ? "bg-green-100 text-green-800"
-                                    : tarea.estado === "en_progreso"
-                                    ? "bg-blue-100 text-blue-800"
-                                    : "bg-gray-100 text-gray-800"
-                                }`}
-                              >
-                                {tarea.estado === "completada"
-                                  ? "✓"
-                                  : tarea.estado === "en_progreso"
-                                  ? "●"
-                                  : "○"}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 text-xs text-gray-600">
-                              {tarea.empleado?.nombre}{" "}
-                              {tarea.empleado?.apellido}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <div className="bg-gray-50 p-6 text-center">
-                      <p className="text-sm text-gray-400">No hay tareas</p>
-                    </div>
-                  )}
-                </div>
-              </section>
+                )}
+                <button
+                  onClick={onClose}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
-            {/* Columna Derecha - Comentarios */}
-            <div className="space-y-6">
-              <section className="h-full flex flex-col">
-                <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4" />
-                  Comentarios ({comentarios.length})
-                </h3>
-
-                {/* Input para nuevo comentario */}
-                <div className="mb-6">
-                  <div className="flex gap-2">
-                    <Input
-                      value={nuevoComentario}
-                      onChange={(e) => setNuevoComentario(e.target.value)}
-                      placeholder="Agregar un comentario..."
-                      className="flex-1 h-12"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          agregarComentario();
+            {/* Content - Grid de 2 columnas */}
+            <div className="p-8">
+              <div className="grid grid-cols-2 gap-8">
+                {/* Columna Izquierda */}
+                <div className="space-y-6">
+                  {/* Información del Proceso */}
+                  <section>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Información del Proceso
+                    </h3>
+                    <div className="bg-gray-50 rounded-lg p-5 space-y-4">
+                      <EditableSelect
+                        label="Cliente"
+                        value={
+                          procesoLocal?.cliente?.nombre ||
+                          clientes.find(
+                            (c) => c.id === procesoLocal?.cliente_id
+                          )?.nombre ||
+                          ""
                         }
-                      }}
-                    />
-                    <Button
-                      onClick={agregarComentario}
-                      disabled={!nuevoComentario.trim()}
-                      className="h-12 px-6"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Enviar
-                    </Button>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-2">
-                    Presiona Enter para enviar
-                  </p>
+                        options={clientes}
+                        onUpdate={(id) => actualizarCampo("cliente_id", id)}
+                      />
+                      <EditableSelect
+                        label="Rol del Cliente"
+                        value={
+                          procesoLocal?.rol_cliente?.nombre ||
+                          rolesCliente.find(
+                            (r) => r.id === procesoLocal?.rol_cliente_id
+                          )?.nombre ||
+                          ""
+                        }
+                        options={rolesCliente}
+                        onUpdate={(id) => actualizarCampo("rol_cliente_id", id)}
+                      />
+                      <EditableSelect
+                        label="Materia"
+                        value={
+                          procesoLocal?.materia?.nombre ||
+                          materias.find(
+                            (m) => m.id === procesoLocal?.materia_id
+                          )?.nombre ||
+                          ""
+                        }
+                        options={materias}
+                        onUpdate={(id) => actualizarCampo("materia_id", id)}
+                      />
+                      <EditableSelect
+                        label="Estado"
+                        value={
+                          procesoLocal?.estado?.nombre ||
+                          estados.find((e) => e.id === procesoLocal?.estado_id)
+                            ?.nombre ||
+                          ""
+                        }
+                        options={estados}
+                        onUpdate={(id) => actualizarCampo("estado_id", id)}
+                        badge={true}
+                        badgeColor={
+                          procesoLocal?.estado?.color ||
+                          estados.find((e) => e.id === procesoLocal?.estado_id)
+                            ?.color
+                        }
+                      />
+                      <EditableSelect
+                        label="Tipo de Proceso"
+                        value={
+                          procesoLocal?.tipo_proceso?.nombre ||
+                          tiposProceso.find(
+                            (t) => t.id === procesoLocal?.tipo_proceso_id
+                          )?.nombre ||
+                          ""
+                        }
+                        options={tiposProceso}
+                        onUpdate={(id) =>
+                          actualizarCampo("tipo_proceso_id", id)
+                        }
+                      />
+
+                      <EditableText
+                        label="Dependencia"
+                        value={procesoLocal?.dependencia}
+                        onUpdate={(value) =>
+                          actualizarCampo("dependencia", value)
+                        }
+                      />
+                    </div>
+                  </section>
+
+                  {/* Pretensiones y Detalles */}
+                  <section>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-4">
+                      Detalles del Proceso
+                    </h3>
+                    <div className="bg-gray-50 rounded-lg p-5 space-y-4">
+                      <EditableText
+                        label="Pretensiones"
+                        value={procesoLocal?.pretensiones}
+                        onUpdate={(value) =>
+                          actualizarCampo("pretensiones", value)
+                        }
+                        multiline={true}
+                      />
+                      <EditableText
+                        label="Última Actuación Esperada"
+                        value={procesoLocal?.ultima_actuacion_esperada}
+                        onUpdate={(value) =>
+                          actualizarCampo("ultima_actuacion_esperada", value)
+                        }
+                        multiline={true}
+                      />
+                      <EditableText
+                        label="Lugar"
+                        value={procesoLocal?.lugar}
+                        onUpdate={(value) => actualizarCampo("lugar", value)}
+                      />
+                    </div>
+                  </section>
+
+                  {/* Fechas */}
+                  <section>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                      <Calendar className="w-4 h-4" />
+                      Fechas
+                    </h3>
+                    <div className="bg-gray-50 rounded-lg p-5 space-y-4">
+                      <EditableDate
+                        label="Próximo Contacto"
+                        value={procesoLocal?.fecha_proximo_contacto}
+                        onUpdate={(value) =>
+                          actualizarCampo("fecha_proximo_contacto", value)
+                        }
+                      />
+                    </div>
+                  </section>
+
+                  {/* Empleados Asignados */}
+                  <section>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                        <User className="w-4 h-4" />
+                        Empleados Asignados ({procesosEmpleados.length})
+                      </h3>
+                    </div>
+
+                    {/* Selector para agregar empleado */}
+                    {proceso?.id && (
+                      <div className="mb-3">
+                        <EditableSelect
+                          label="Agregar Empleado"
+                          value=""
+                          options={empleados
+                            .filter(
+                              (emp) =>
+                                !procesosEmpleados.some(
+                                  (pe) => pe.empleado_id === emp.id
+                                )
+                            )
+                            .map((e) => ({
+                              id: e.id,
+                              nombre: `${e.nombre} ${e.apellido}`,
+                            }))}
+                          onUpdate={async (empleadoId) => {
+                            if (!empleadoId) return;
+                            try {
+                              const { error } = await supabase
+                                .from("proceso_empleados")
+                                .insert({
+                                  proceso_id: proceso.id,
+                                  empleado_id: empleadoId,
+                                  rol: "Colaborador",
+                                  activo: true,
+                                });
+                              if (error) throw error;
+                              cargarDatos();
+                            } catch (error) {
+                              console.error("Error asignando empleado:", error);
+                              toast.error(
+                                "Error al asignar empleado: " + error.message
+                              );
+                            }
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      {procesosEmpleados.map((pe) => (
+                        <div
+                          key={pe.id}
+                          className="bg-gray-50 rounded-lg p-4 flex items-center justify-between hover:bg-gray-100 transition-colors group"
+                        >
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">
+                              {pe.empleado?.nombre} {pe.empleado?.apellido}
+                            </p>
+                            {pe.rol && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                {pe.rol}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400">
+                              {formatearFecha(pe.fecha_asignacion)}
+                            </span>
+                            {proceso?.id && (
+                              <button
+                                onClick={async () => {
+                                  if (
+                                    !confirm(
+                                      "¿Remover este empleado del proceso?"
+                                    )
+                                  )
+                                    return;
+                                  try {
+                                    const { error } = await supabase
+                                      .from("proceso_empleados")
+                                      .delete()
+                                      .eq("id", pe.id);
+                                    if (error) throw error;
+                                    cargarDatos();
+                                  } catch (error) {
+                                    console.error(
+                                      "Error removiendo empleado:",
+                                      error
+                                    );
+                                    toast.error("Error al remover empleado");
+                                  }
+                                }}
+                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 rounded transition-all"
+                              >
+                                <X className="w-4 h-4 text-red-600" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {procesosEmpleados.length === 0 && (
+                        <div className="bg-gray-50 rounded-lg p-8 text-center">
+                          <p className="text-sm text-gray-400">
+                            No hay empleados asignados
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+
+                  {/* Sección de Tareas */}
+                  <section>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                        <FileText className="w-4 h-4" />
+                        Tareas ({tareas.length})
+                      </h3>
+                      <button
+                        onClick={() => {
+                          setTareaSeleccionada({
+                            proceso_id: proceso.id,
+                            nombre: "",
+                          });
+                          setTareaPanelOpen(true);
+                        }}
+                        className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-medium rounded transition-colors flex items-center gap-1.5"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Nueva Tarea
+                      </button>
+                    </div>
+
+                    {/* Lista de tareas */}
+                    <AnimatePresence mode="popLayout">
+                      {tareas.length > 0 ? (
+                        <div className="space-y-2">
+                          {tareas.map((tarea) => (
+                            <motion.div
+                              key={tarea.id}
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, x: -20 }}
+                              className="bg-gray-50 rounded-lg p-3 hover:bg-gray-100 transition-colors cursor-pointer border border-transparent hover:border-primary-200"
+                              onClick={() => {
+                                setTareaSeleccionada(tarea);
+                                setTareaPanelOpen(true);
+                              }}
+                            >
+                              <div className="flex items-start gap-3">
+                                {tarea.estado?.nombre === "completada" ? (
+                                  <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                                ) : (
+                                  <Circle className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p
+                                    className={clsx(
+                                      "text-sm font-medium",
+                                      tarea.estado?.nombre === "completada"
+                                        ? "text-gray-400 line-through"
+                                        : "text-gray-900"
+                                    )}
+                                  >
+                                    {tarea.nombre}
+                                  </p>
+                                  {tarea.descripcion && (
+                                    <p className="text-xs text-gray-500 mt-1 line-clamp-1">
+                                      {tarea.descripcion}
+                                    </p>
+                                  )}
+                                  <div className="flex items-center gap-2 mt-2">
+                                    {tarea.estado && (
+                                      <span
+                                        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                                        style={{
+                                          backgroundColor: `${tarea.estado.color}20`,
+                                          color: tarea.estado.color,
+                                        }}
+                                      >
+                                        {tarea.estado.nombre}
+                                      </span>
+                                    )}
+                                    {tarea.prioridad && (
+                                      <span
+                                        className={clsx(
+                                          "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",
+                                          tarea.prioridad === "alta"
+                                            ? "bg-red-100 text-red-700"
+                                            : tarea.prioridad === "media"
+                                            ? "bg-yellow-100 text-yellow-700"
+                                            : "bg-gray-100 text-gray-700"
+                                        )}
+                                      >
+                                        {tarea.prioridad}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      ) : (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="bg-gray-50 rounded-lg p-8 text-center"
+                        >
+                          <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                          <p className="text-sm text-gray-400">
+                            No hay tareas en este proceso
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            Haz clic en "Nueva Tarea" para empezar
+                          </p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </section>
                 </div>
 
-                {/* Lista de comentarios - Scroll independiente */}
-                <div className="flex-1 space-y-4 overflow-y-auto pr-2 max-h-[calc(100vh-300px)]">
-                  {comentarios.map((comentario) => (
-                    <div
-                      key={comentario.id}
-                      className="bg-gray-50 rounded-lg p-5 hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200"
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <span className="text-xs text-gray-400 flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {formatearFecha(comentario.created_at)}
-                        </span>
+                {/* Columna Derecha - Comentarios */}
+                <div className="space-y-6">
+                  <section className="h-full flex flex-col">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4" />
+                      Comentarios ({comentarios.length})
+                    </h3>
+
+                    {/* Input para nuevo comentario */}
+                    <div className="mb-6">
+                      <div className="flex gap-2">
+                        <Input
+                          value={nuevoComentario}
+                          onChange={(e) => setNuevoComentario(e.target.value)}
+                          placeholder="Agregar un comentario..."
+                          className="flex-1 h-12"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              agregarComentario();
+                            }
+                          }}
+                        />
+                        <Button
+                          onClick={agregarComentario}
+                          disabled={!nuevoComentario.trim()}
+                          className="h-12 px-6"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Enviar
+                        </Button>
                       </div>
-                      <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed mb-3">
-                        {comentario.contenido}
-                      </p>
-                      <p className="text-xs text-gray-500 font-medium flex items-center gap-1.5">
-                        <User className="w-3 h-3" />
-                        {comentario.empleado?.nombre}{" "}
-                        {comentario.empleado?.apellido || "Usuario"}
+                      <p className="text-xs text-gray-400 mt-2">
+                        Presiona Enter para enviar
                       </p>
                     </div>
-                  ))}
-                  {comentarios.length === 0 && (
-                    <div className="bg-gray-50 rounded-lg p-12 text-center border-2 border-dashed border-gray-200">
-                      <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                      <p className="text-sm text-gray-400 font-medium">
-                        No hay comentarios aún
-                      </p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        Sé el primero en comentar
-                      </p>
+
+                    {/* Lista de comentarios - Scroll independiente */}
+                    <div className="flex-1 space-y-4 overflow-y-auto pr-2 max-h-[calc(100vh-300px)]">
+                      {comentarios.map((comentario) => (
+                        <div
+                          key={comentario.id}
+                          className="bg-gray-50 rounded-lg p-5 hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200"
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {formatearFecha(comentario.created_at)}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed mb-3">
+                            {comentario.contenido}
+                          </p>
+                          <p className="text-xs text-gray-500 font-medium flex items-center gap-1.5">
+                            <User className="w-3 h-3" />
+                            {comentario.empleado?.nombre}{" "}
+                            {comentario.empleado?.apellido || "Usuario"}
+                          </p>
+                        </div>
+                      ))}
+                      {comentarios.length === 0 && (
+                        <div className="bg-gray-50 rounded-lg p-12 text-center border-2 border-dashed border-gray-200">
+                          <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                          <p className="text-sm text-gray-400 font-medium">
+                            No hay comentarios aún
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            Sé el primero en comentar
+                          </p>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </section>
                 </div>
-              </section>
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* TareaPanel integrado */}
+      <TareaPanel
+        tarea={tareaSeleccionada}
+        isOpen={tareaPanelOpen}
+        onClose={() => {
+          setTareaPanelOpen(false);
+          setTareaSeleccionada(null);
+          cargarDatos(); // Recargar tareas cuando se cierre el panel
+        }}
+        onUpdate={cargarDatos}
+      />
     </>
   );
-// Componente de texto editable
-function EditableText({ label, value, onUpdate, multiline = false }) {
-  const [editing, setEditing] = useState(false);
-  const [currentValue, setCurrentValue] = useState(value || "");
-  const contentRef = useRef();
 
-  useEffect(() => {
-    setCurrentValue(value || "");
-  }, [value]);
+  // Componente de texto editable
+  function EditableText({ label, value, onUpdate, multiline = false }) {
+    const [editing, setEditing] = useState(false);
 
-  useEffect(() => {
-    if (editing && contentRef.current) {
-      contentRef.current.focus();
+    // Limpiar HTML tags del valor inicial
+    const cleanValue = (val) => {
+      if (!val) return "";
+      // Eliminar tags HTML pero mantener el contenido
+      const temp = document.createElement("div");
+      temp.innerHTML = val;
+      return temp.textContent || temp.innerText || "";
+    };
 
-      const handleKeyDown = (e) => {
-        if (e.key === "Enter" && !e.shiftKey && !multiline) {
-          e.preventDefault();
-          handleSave();
-        }
-        if (e.key === "Escape") {
-          e.preventDefault();
-          setCurrentValue(value || "");
-          setEditing(false);
-        }
-      };
+    const [currentValue, setCurrentValue] = useState(cleanValue(value));
+    const contentRef = useRef();
 
-      contentRef.current.addEventListener("keydown", handleKeyDown);
-      return () => {
-        contentRef.current?.removeEventListener("keydown", handleKeyDown);
-      };
-    }
-  }, [editing, value, multiline]);
+    useEffect(() => {
+      setCurrentValue(cleanValue(value));
+    }, [value]);
 
-  const handleSave = () => {
-    setEditing(false);
-    if (currentValue !== value) {
-      onUpdate(currentValue.trim());
-    }
-  };
+    useEffect(() => {
+      if (editing && contentRef.current) {
+        contentRef.current.focus();
 
-  return (
-    <div
-      className={clsx(
-        "flex justify-between",
-        multiline ? "flex-col gap-2" : "items-center"
-      )}
-    >
-      <span className="text-sm text-gray-500 font-medium">{label}</span>
-      <div
-        className={clsx(
-          "px-3 py-2 rounded text-sm transition-all cursor-text flex-1",
-          multiline ? "min-h-20" : "min-h-8",
-          editing
-            ? "bg-blue-50 ring-2 ring-blue-400"
-            : "bg-white hover:bg-gray-50 border border-gray-200"
-        )}
-        onClick={() => !editing && setEditing(true)}
-      >
-        {editing ? (
-          <ContentEditable
-            innerRef={contentRef}
-            html={currentValue}
-            onChange={(e) => setCurrentValue(e.target.value)}
-            onBlur={handleSave}
-            className="outline-none w-full"
-            style={{ caretColor: "#2563eb" }}
-          />
-        ) : (
-          <div className="text-gray-900">
-            {currentValue || (
-              <span className="text-gray-400">Click para editar...</span>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+        const handleKeyDown = (e) => {
+          if (e.key === "Enter" && !e.shiftKey && !multiline) {
+            e.preventDefault();
+            handleSave();
+          }
+          if (e.key === "Escape") {
+            e.preventDefault();
+            setCurrentValue(value || "");
+            setEditing(false);
+          }
+        };
 
-// Componente de select editable
-function EditableSelect({
-  label,
-  value,
-  options,
-  onUpdate,
-  badge = false,
-  badgeColor,
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [referenceElement, setReferenceElement] = useState(null);
-  const [popperElement, setPopperElement] = useState(null);
-  const { styles, attributes } = usePopper(referenceElement, popperElement, {
-    placement: "bottom-start",
-    strategy: "fixed",
-  });
+        contentRef.current.addEventListener("keydown", handleKeyDown);
+        return () => {
+          contentRef.current?.removeEventListener("keydown", handleKeyDown);
+        };
+      }
+    }, [editing, value, multiline]);
 
-  const handleSelect = (option) => {
-    onUpdate(option.id);
-    setIsOpen(false);
-  };
-
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (
-        popperElement &&
-        !popperElement.contains(e.target) &&
-        referenceElement &&
-        !referenceElement.contains(e.target)
-      ) {
-        setIsOpen(false);
+    const handleSave = () => {
+      setEditing(false);
+      const cleanedValue = cleanValue(currentValue);
+      if (cleanedValue !== cleanValue(value)) {
+        onUpdate(cleanedValue);
       }
     };
 
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () =>
-        document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [isOpen, popperElement, referenceElement]);
-
-  return (
-    <div className="flex justify-between items-center">
-      <span className="text-sm text-gray-500 font-medium">{label}</span>
+    return (
       <div
-        ref={setReferenceElement}
         className={clsx(
-          "px-3 py-2 rounded text-sm cursor-pointer transition-all flex-1 ml-4",
-          isOpen
-            ? "bg-blue-50 ring-2 ring-blue-400"
-            : "bg-white hover:bg-gray-50 border border-gray-200"
+          "flex justify-between",
+          multiline ? "flex-col gap-2" : "items-center"
         )}
-        onClick={() => setIsOpen(!isOpen)}
       >
-        {value ? (
-          badge ? (
-            <span
-              className="inline-block px-2 py-1 rounded text-xs font-medium"
-              style={{
-                backgroundColor: badgeColor ? `${badgeColor}20` : "#f3f4f6",
-                color: badgeColor || "#374151",
-              }}
-            >
-              {value}
-            </span>
+        <span className="text-sm text-gray-500 font-medium">{label}</span>
+        <div
+          className={clsx(
+            "px-3 py-2 rounded text-sm transition-all cursor-text flex-1",
+            multiline ? "min-h-20" : "min-h-8",
+            editing
+              ? "bg-blue-50 ring-2 ring-blue-400"
+              : "bg-white hover:bg-gray-50 border border-gray-200"
+          )}
+          onClick={() => !editing && setEditing(true)}
+        >
+          {editing ? (
+            <ContentEditable
+              innerRef={contentRef}
+              html={currentValue}
+              onChange={(e) => setCurrentValue(e.target.value)}
+              onBlur={handleSave}
+              className="outline-none w-full"
+              style={{ caretColor: "#2563eb" }}
+            />
           ) : (
-            <span className="text-gray-900">{value}</span>
-          )
+            <div className="text-gray-900">
+              {currentValue || (
+                <span className="text-gray-400">Click para editar...</span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Componente de select editable
+  function EditableSelect({
+    label,
+    value,
+    options,
+    onUpdate,
+    badge = false,
+    badgeColor,
+  }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const [referenceElement, setReferenceElement] = useState(null);
+    const [popperElement, setPopperElement] = useState(null);
+    const { styles, attributes } = usePopper(referenceElement, popperElement, {
+      placement: "bottom-start",
+      strategy: "fixed",
+    });
+
+    const handleSelect = (option) => {
+      onUpdate(option.id);
+      setIsOpen(false);
+    };
+
+    useEffect(() => {
+      const handleClickOutside = (e) => {
+        if (
+          popperElement &&
+          !popperElement.contains(e.target) &&
+          referenceElement &&
+          !referenceElement.contains(e.target)
+        ) {
+          setIsOpen(false);
+        }
+      };
+
+      if (isOpen) {
+        document.addEventListener("mousedown", handleClickOutside);
+        return () =>
+          document.removeEventListener("mousedown", handleClickOutside);
+      }
+    }, [isOpen, popperElement, referenceElement]);
+
+    return (
+      <div className="flex justify-between items-center">
+        <span className="text-sm text-gray-500 font-medium">{label}</span>
+        <div
+          ref={setReferenceElement}
+          className={clsx(
+            "px-3 py-2 rounded-lg text-sm cursor-pointer transition-all flex-1 ml-4",
+            isOpen
+              ? "bg-blue-50 ring-2 ring-blue-400"
+              : "bg-white hover:bg-gray-50 border border-gray-200"
+          )}
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          {value ? (
+            badge ? (
+              <span
+                className="inline-block px-2 py-1 rounded-lg text-xs font-medium"
+                style={{
+                  backgroundColor: badgeColor ? `${badgeColor}20` : "#f3f4f6",
+                  color: badgeColor || "#374151",
+                }}
+              >
+                {value}
+              </span>
+            ) : (
+              <span className="text-gray-900">{value}</span>
+            )
+          ) : (
+            <span className="text-gray-400">Seleccionar...</span>
+          )}
+        </div>
+
+        {isOpen &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              ref={setPopperElement}
+              style={styles.popper}
+              {...attributes.popper}
+              className="z-[11000] bg-white border-2 border-blue-400 shadow-xl rounded-lg py-1 min-w-[250px] max-h-[300px] overflow-auto"
+            >
+              {options.map((option) => (
+                <div
+                  key={option.id}
+                  className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm transition-colors"
+                  onClick={() => handleSelect(option)}
+                >
+                  {option.nombre}
+                </div>
+              ))}
+              {options.length === 0 && (
+                <div className="px-3 py-2 text-sm text-gray-400">
+                  No hay opciones
+                </div>
+              )}
+            </div>,
+            document.body
+          )}
+      </div>
+    );
+  }
+
+  // Componente de fecha editable
+  function EditableDate({ label, value, onUpdate }) {
+    const [editing, setEditing] = useState(false);
+    const inputRef = useRef();
+
+    const formatearFecha = (fecha) => {
+      if (!fecha) return "";
+      const date = new Date(fecha);
+      return date.toISOString().slice(0, 16);
+    };
+
+    const formatearFechaDisplay = (fecha) => {
+      if (!fecha) return "Sin fecha";
+      return new Date(fecha).toLocaleString("es-ES", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    };
+
+    const handleSave = (e) => {
+      const newValue = e.target.value;
+      setEditing(false);
+      if (newValue && newValue !== formatearFecha(value)) {
+        onUpdate(new Date(newValue).toISOString());
+      }
+    };
+
+    return (
+      <div className="flex justify-between items-center">
+        <span className="text-sm text-gray-500 font-medium">{label}</span>
+        {editing ? (
+          <input
+            ref={inputRef}
+            type="datetime-local"
+            defaultValue={formatearFecha(value)}
+            onBlur={handleSave}
+            onChange={handleSave}
+            autoFocus
+            className="px-3 py-2 rounded text-sm bg-blue-50 ring-2 ring-blue-400 outline-none flex-1 ml-4"
+          />
         ) : (
-          <span className="text-gray-400">Seleccionar...</span>
+          <div
+            onClick={() => setEditing(true)}
+            className="px-3 py-2 rounded text-sm bg-white hover:bg-gray-50 border border-gray-200 cursor-pointer transition-all flex-1 ml-4"
+          >
+            <span className="text-gray-900">
+              {formatearFechaDisplay(value)}
+            </span>
+          </div>
         )}
       </div>
-
-      {isOpen &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            ref={setPopperElement}
-            style={styles.popper}
-            {...attributes.popper}
-            className="z-[10001] bg-white border-2 border-blue-400 shadow-xl rounded-lg py-1 min-w-[250px] max-h-[300px] overflow-auto"
-          >
-            {options.map((option) => (
-              <div
-                key={option.id}
-                className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm transition-colors"
-                onClick={() => handleSelect(option)}
-              >
-                {option.nombre}
-              </div>
-            ))}
-            {options.length === 0 && (
-              <div className="px-3 py-2 text-sm text-gray-400">
-                No hay opciones
-              </div>
-            )}
-          </div>,
-          document.body
-        )}
-    </div>
-  );
-}
-
-// Componente de fecha editable
-function EditableDate({ label, value, onUpdate }) {
-  const [editing, setEditing] = useState(false);
-  const inputRef = useRef();
-
-  const formatearFecha = (fecha) => {
-    if (!fecha) return "";
-    const date = new Date(fecha);
-    return date.toISOString().slice(0, 16);
-  };
-
-  const formatearFechaDisplay = (fecha) => {
-    if (!fecha) return "Sin fecha";
-    return new Date(fecha).toLocaleString("es-ES", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const handleSave = (e) => {
-    const newValue = e.target.value;
-    setEditing(false);
-    if (newValue && newValue !== formatearFecha(value)) {
-      onUpdate(new Date(newValue).toISOString());
-    }
-  };
-
-  return (
-    <div className="flex justify-between items-center">
-      <span className="text-sm text-gray-500 font-medium">{label}</span>
-      {editing ? (
-        <input
-          ref={inputRef}
-          type="datetime-local"
-          defaultValue={formatearFecha(value)}
-          onBlur={handleSave}
-          onChange={handleSave}
-          autoFocus
-          className="px-3 py-2 rounded text-sm bg-blue-50 ring-2 ring-blue-400 outline-none flex-1 ml-4"
-        />
-      ) : (
-        <div
-          onClick={() => setEditing(true)}
-          className="px-3 py-2 rounded text-sm bg-white hover:bg-gray-50 border border-gray-200 cursor-pointer transition-all flex-1 ml-4"
-        >
-          <span className="text-gray-900">{formatearFechaDisplay(value)}</span>
-        </div>
-      )}
-    </div>
-  );
-}
+    );
+  }
 }

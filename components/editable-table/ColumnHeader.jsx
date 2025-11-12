@@ -80,7 +80,7 @@ export default function ColumnHeader({
   if (!canSort) {
     const IconComponent = icon || COLUMN_ICONS[columnId];
     return (
-      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 border-b">
+      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 border-b border-r">
         <div className="flex items-center gap-2">
           {IconComponent && <IconComponent className="w-4 h-4 text-gray-500" />}
           <span>{label}</span>
@@ -93,7 +93,7 @@ export default function ColumnHeader({
 
   return (
     <>
-      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 border-b">
+      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 border-b border-r">
         <div
           ref={setReferenceElement}
           onClick={() => setShowMenu(!showMenu)}

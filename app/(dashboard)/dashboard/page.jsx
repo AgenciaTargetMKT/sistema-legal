@@ -132,7 +132,7 @@ export default function DashboardPage() {
             </h2>
             <Link
               href="/procesos"
-              className="text-sm text-blue-600 hover:text-blue-500"
+              className="text-sm text-primary-600 hover:text-primary-500"
             >
               Ver todos
             </Link>
@@ -178,7 +178,7 @@ export default function DashboardPage() {
             </h2>
             <Link
               href="/tareas"
-              className="text-sm text-blue-600 hover:text-blue-500"
+              className="text-sm text-primary-600 hover:text-primary-500"
             >
               Ver todas
             </Link>
@@ -231,7 +231,7 @@ export default function DashboardPage() {
           </h2>
           <Link
             href="/impulsos"
-            className="text-sm text-blue-600 hover:text-blue-500"
+            className="text-sm text-primary-600 hover:text-primary-500"
           >
             Ver todos
           </Link>
@@ -246,10 +246,10 @@ export default function DashboardPage() {
             impulsosProximos.map((impulso) => (
               <div
                 key={impulso.id}
-                className="p-4 bg-blue-50 rounded-lg border border-blue-100"
+                className="p-4 bg-primary-50 rounded-lg border border-primary-100"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                  <span className="px-2 py-1 text-xs bg-primary-100 text-primary-800 rounded-full">
                     {impulso.tipo}
                   </span>
                   <span className="text-xs text-gray-500">

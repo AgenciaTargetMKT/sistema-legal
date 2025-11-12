@@ -22,7 +22,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical } from "lucide-react";
+import { GripVertical, PanelRightOpen, Trash2 } from "lucide-react";
 import ColumnHeader from "./ColumnHeader";
 
 export default function TareasTable({
@@ -35,6 +35,7 @@ export default function TareasTable({
   const [estados, setEstados] = useState([]);
   const [empleados, setEmpleados] = useState([]);
   const [sortConfig, setSortConfig] = useState(null);
+  const [seleccionadas, setSeleccionadas] = useState(new Set());
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -98,30 +99,29 @@ export default function TareasTable({
       let aVal, bVal;
 
       switch (columnId) {
-        case "titulo":
-          aVal = a.titulo?.toLowerCase() || "";
-          bVal = b.titulo?.toLowerCase() || "";
-          break;
-        case "proceso":
-          aVal = a.proceso?.nombre?.toLowerCase() || "";
-          bVal = b.proceso?.nombre?.toLowerCase() || "";
+        case "nombre":
+          aVal = a.nombre?.toLowerCase() || "";
+          bVal = b.nombre?.toLowerCase() || "";
           break;
         case "estado":
           aVal = a.estado?.nombre?.toLowerCase() || "";
           bVal = b.estado?.nombre?.toLowerCase() || "";
           break;
-        case "prioridad":
-          const prioridadOrden = { alta: 3, media: 2, baja: 1 };
-          aVal = prioridadOrden[a.prioridad] || 0;
-          bVal = prioridadOrden[b.prioridad] || 0;
-          break;
         case "empleado":
           aVal = a.empleado_asignado?.nombre?.toLowerCase() || "";
           bVal = b.empleado_asignado?.nombre?.toLowerCase() || "";
           break;
+        case "created_at":
+          aVal = a.created_at || "";
+          bVal = b.created_at || "";
+          break;
         case "fecha_vencimiento":
           aVal = a.fecha_vencimiento || "";
           bVal = b.fecha_vencimiento || "";
+          break;
+        case "observaciones":
+          aVal = a.observaciones?.toLowerCase() || "";
+          bVal = b.observaciones?.toLowerCase() || "";
           break;
         default:
           return 0;
@@ -138,10 +138,7 @@ export default function TareasTable({
   const cargarCatalogos = async () => {
     try {
       const [procesosRes, estadosRes, empleadosRes] = await Promise.all([
-        supabase
-          .from("procesos")
-          .select("id, nombre, numero_proceso")
-          .order("nombre"),
+        supabase.from("procesos").select("id, nombre").order("nombre"),
         supabase
           .from("estados_tarea")
           .select("id, nombre, color")
@@ -243,91 +240,163 @@ export default function TareasTable({
       observaciones: "",
     });
   };
+
+  const toggleSeleccion = (tareaId) => {
+    setSeleccionadas((prev) => {
+      const nuevo = new Set(prev);
+      if (nuevo.has(tareaId)) {
+        nuevo.delete(tareaId);
+      } else {
+        nuevo.add(tareaId);
+      }
+      return nuevo;
+    });
+  };
+
+  const toggleSeleccionarTodas = () => {
+    if (seleccionadas.size === tareas.length) {
+      setSeleccionadas(new Set());
+    } else {
+      setSeleccionadas(new Set(tareas.map((t) => t.id)));
+    }
+  };
+
+  const eliminarSeleccionadas = async () => {
+    if (seleccionadas.size === 0) return;
+
+    const mensaje =
+      seleccionadas.size === 1
+        ? "¿Eliminar 1 tarea seleccionada?"
+        : `¿Eliminar ${seleccionadas.size} tareas seleccionadas?`;
+
+    if (!confirm(mensaje)) return;
+
+    try {
+      const { error } = await supabase
+        .from("tareas")
+        .delete()
+        .in("id", Array.from(seleccionadas));
+
+      if (error) throw error;
+
+      setSeleccionadas(new Set());
+      onUpdate?.();
+    } catch (error) {
+      console.error("Error eliminando tareas:", error);
+      alert("Error al eliminar: " + error.message);
+    }
+  };
+
   return (
-    <div className="w-full overflow-auto bg-white rounded-lg shadow-sm border">
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
-        <table className="w-full border-collapse">
-          <thead className="bg-gray-50 sticky top-0 z-10">
-            <tr>
-              <th className="px-2 py-3 text-center text-xs font-semibold text-gray-700 border-b w-10">
-                ⋮⋮
-              </th>
-              <ColumnHeader
-                label="Título"
-                columnId="titulo"
-                onSort={handleSort}
-                currentSort={sortConfig}
-              />
-              <ColumnHeader
-                label="Proceso"
-                columnId="proceso"
-                onSort={handleSort}
-                currentSort={sortConfig}
-              />
-              <ColumnHeader
-                label="Estado"
-                columnId="estado"
-                onSort={handleSort}
-                currentSort={sortConfig}
-              />
-              <ColumnHeader
-                label="Prioridad"
-                columnId="prioridad"
-                onSort={handleSort}
-                currentSort={sortConfig}
-              />
-              <ColumnHeader
-                label="Asignado a"
-                columnId="empleado"
-                onSort={handleSort}
-                currentSort={sortConfig}
-              />
-              <ColumnHeader
-                label="Vencimiento"
-                columnId="fecha_vencimiento"
-                onSort={handleSort}
-                currentSort={sortConfig}
-              />
-              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 border-b w-[60px]">
-                👁️
-              </th>
-            </tr>
-          </thead>
-          <SortableContext
-            items={tareas.map((t) => t.id)}
-            strategy={verticalListSortingStrategy}
+    <div className="w-full">
+      {seleccionadas.size > 0 && (
+        <div className="mb-2 px-4 py-2 bg-primary-50 border border-primary-200 rounded-lg flex items-center justify-between">
+          <span className="text-sm text-primary-900 font-medium">
+            {seleccionadas.size} tarea{seleccionadas.size !== 1 ? "s" : ""}{" "}
+            seleccionada{seleccionadas.size !== 1 ? "s" : ""}
+          </span>
+          <button
+            onClick={eliminarSeleccionadas}
+            className="flex items-center gap-2 px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
           >
-            <tbody>
-              {tareas.map((tarea) => (
-                <SortableRow
-                  key={tarea.id}
-                  tarea={tarea}
-                  procesos={procesos}
-                  estados={estados}
-                  empleados={empleados}
-                  actualizarCelda={actualizarCelda}
-                  onTareaClick={onTareaClick}
+            <Trash2 className="h-4 w-4" />
+            Eliminar
+          </button>
+        </div>
+      )}
+      <div className="w-full overflow-auto bg-white rounded-lg shadow-sm border">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <table className="w-full border-collapse">
+            <thead className="bg-gray-50 sticky top-0 z-10">
+              <tr>
+                <th className="px-2 py-2 text-center text-xs font-semibold text-gray-700 border-b w-10">
+                  <input
+                    type="checkbox"
+                    checked={
+                      tareas.length > 0 && seleccionadas.size === tareas.length
+                    }
+                    onChange={toggleSeleccionarTodas}
+                    className="cursor-pointer"
+                  />
+                </th>
+                <th className="px-2 py-3 text-center text-xs font-semibold text-gray-700 border-b w-10">
+                  ⋮⋮
+                </th>
+                <ColumnHeader
+                  label="Nombre"
+                  columnId="nombre"
+                  onSort={handleSort}
+                  currentSort={sortConfig}
                 />
-              ))}
-              <tr className="border-t-2 border-gray-200">
-                <td colSpan="8" className="p-0">
-                  <button
-                    onClick={crearNuevaTarea}
-                    className="w-full px-4 py-3 text-left text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors flex items-center gap-2"
-                  >
-                    <span className="text-lg">+</span>
-                    Nueva tarea
-                  </button>
-                </td>
+                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 border-b border-r w-32">
+                  <div className="flex items-center gap-2 cursor-pointer">
+                    <span>Estado</span>
+                  </div>
+                </th>
+                <ColumnHeader
+                  label="Asignado"
+                  columnId="empleado"
+                  onSort={handleSort}
+                  currentSort={sortConfig}
+                />
+                <ColumnHeader
+                  label="Fecha Creación"
+                  columnId="created_at"
+                  onSort={handleSort}
+                  currentSort={sortConfig}
+                />
+                <ColumnHeader
+                  label="Fecha Vencimiento"
+                  columnId="fecha_vencimiento"
+                  onSort={handleSort}
+                  currentSort={sortConfig}
+                />
+                <ColumnHeader
+                  label="Observaciones"
+                  columnId="observaciones"
+                  onSort={handleSort}
+                  currentSort={sortConfig}
+                />
               </tr>
-            </tbody>
-          </SortableContext>
-        </table>
-      </DndContext>
+            </thead>
+            <SortableContext
+              items={tareas.map((t) => t.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <tbody>
+                {tareas.map((tarea) => (
+                  <SortableRow
+                    key={tarea.id}
+                    tarea={tarea}
+                    procesos={procesos}
+                    estados={estados}
+                    empleados={empleados}
+                    actualizarCelda={actualizarCelda}
+                    onTareaClick={onTareaClick}
+                    seleccionada={seleccionadas.has(tarea.id)}
+                    onToggleSeleccion={toggleSeleccion}
+                  />
+                ))}
+                <tr className="border-t-2 border-gray-200">
+                  <td colSpan="8" className="p-0">
+                    <button
+                      onClick={crearNuevaTarea}
+                      className="w-full px-4 py-3 text-left text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors flex items-center gap-2"
+                    >
+                      <span className="text-lg">+</span>
+                      Nueva tarea
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </SortableContext>
+          </table>
+        </DndContext>
+      </div>
     </div>
   );
 }
@@ -340,6 +409,8 @@ function SortableRow({
   empleados,
   actualizarCelda,
   onTareaClick,
+  seleccionada,
+  onToggleSeleccion,
 }) {
   const {
     attributes,
@@ -357,27 +428,43 @@ function SortableRow({
   };
 
   return (
-    <tr ref={setNodeRef} style={style} className="border-b hover:bg-gray-50">
-      <td className="px-2 py-2 text-center">
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className="border-b hover:bg-gray-50 group"
+    >
+      <td className="px-2 py-1.5 text-center">
+        <input
+          type="checkbox"
+          checked={seleccionada}
+          onChange={() => onToggleSeleccion(tarea.id)}
+          className="cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+        />
+      </td>
+      <td className="px-2 py-1.5 text-center">
         <div
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
+          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity"
         >
           <GripVertical className="w-4 h-4" />
         </div>
       </td>
+      {/* Nombre con icono de abrir panel */}
       <TextCell
-        value={tarea.titulo}
-        onChange={(val) => actualizarCelda(tarea.id, "titulo", val)}
-        className="min-w-[250px]"
+        value={tarea.nombre}
+        onChange={(val) => actualizarCelda(tarea.id, "nombre", val)}
+        iconButton={
+          <button
+            onClick={() => onTareaClick?.(tarea)}
+            className="text-gray-300 hover:text-primary-600 transition-colors opacity-0 group-hover:opacity-100"
+            title="Abrir panel"
+          >
+            <PanelRightOpen className="h-3.5 w-3.5" />
+          </button>
+        }
       />
-      <SelectCell
-        value={tarea.proceso?.nombre}
-        options={procesos}
-        onChange={(id) => actualizarCelda(tarea.id, "proceso_id", id)}
-        className="min-w-[180px]"
-      />
+      {/* Estado */}
       <SelectCell
         value={tarea.estado?.nombre}
         options={estados}
@@ -386,10 +473,7 @@ function SortableRow({
         color={tarea.estado?.color}
         className="min-w-[120px]"
       />
-      <PrioridadCell
-        value={tarea.prioridad}
-        onChange={(val) => actualizarCelda(tarea.id, "prioridad", val)}
-      />
+      {/* Asignado */}
       <SelectCell
         value={
           tarea.empleado_asignado
@@ -400,28 +484,38 @@ function SortableRow({
           id: e.id,
           nombre: `${e.nombre} ${e.apellido}`,
         }))}
-        onChange={(id) => actualizarCelda(tarea.id, "empleado_id", id)}
+        onChange={(id) => actualizarCelda(tarea.id, "empleado_asignado_id", id)}
         className="min-w-[150px]"
       />
+      {/* Fecha Creación */}
+      <td className="px-3 py-1.5 border-r text-xs text-gray-600">
+        <div className="truncate">
+          {tarea.created_at
+            ? new Date(tarea.created_at).toLocaleDateString("es-ES", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+              })
+            : "-"}
+        </div>
+      </td>
+      {/* Fecha Vencimiento */}
       <DateCell
         value={tarea.fecha_vencimiento}
         onChange={(val) => actualizarCelda(tarea.id, "fecha_vencimiento", val)}
       />
-      <td className="px-4 py-2 text-center">
-        <button
-          onClick={() => onTareaClick?.(tarea)}
-          className="p-1 hover:bg-blue-100 rounded transition-colors"
-          title="Ver detalles"
-        >
-          <span className="text-lg">👁️</span>
-        </button>
-      </td>
+      {/* Observaciones */}
+      <TextCell
+        value={tarea.observaciones}
+        onChange={(val) => actualizarCelda(tarea.id, "observaciones", val)}
+        className="min-w-[200px]"
+      />
     </tr>
   );
 }
 
 // Componente de celda de texto editable
-function TextCell({ value, onChange, className }) {
+function TextCell({ value, onChange, className, iconButton }) {
   const [editing, setEditing] = useState(false);
   const [currentValue, setCurrentValue] = useState(value || "");
   const contentRef = useRef();
@@ -461,21 +555,24 @@ function TextCell({ value, onChange, className }) {
   };
 
   return (
-    <td className={clsx("px-4 py-2 group relative", className)}>
-      <ContentEditable
-        innerRef={contentRef}
-        html={currentValue}
-        disabled={!editing}
-        onChange={(e) => setCurrentValue(e.target.value)}
-        onFocus={() => setEditing(true)}
-        onBlur={handleSave}
-        className={clsx(
-          "outline-none min-h-[32px] px-2 py-1 rounded transition-all",
-          editing
-            ? "bg-blue-50 ring-2 ring-blue-400"
-            : "hover:bg-gray-100 cursor-text"
-        )}
-      />
+    <td className={clsx("px-3 py-1.5 border-r group relative", className)}>
+      <div className="flex items-center gap-2 min-w-[200px]">
+        {iconButton}
+        <ContentEditable
+          innerRef={contentRef}
+          html={currentValue}
+          disabled={!editing}
+          onChange={(e) => setCurrentValue(e.target.value)}
+          onFocus={() => setEditing(true)}
+          onBlur={handleSave}
+          className={clsx(
+            "outline-none px-2 py-0.5 rounded transition-all text-xs flex-1",
+            editing
+              ? "bg-primary-50 ring-2 ring-primary-400"
+              : "hover:bg-gray-100 cursor-text"
+          )}
+        />
+      </div>
     </td>
   );
 }
@@ -510,19 +607,21 @@ function SelectCell({ value, options, onChange, badge, color, className }) {
   }, [isOpen, popperElement, referenceElement]);
 
   return (
-    <td className={clsx("px-4 py-2 relative", className)}>
+    <td className={clsx("px-3 py-1.5 border-r relative", className)}>
       <div
         ref={setReferenceElement}
         onClick={() => setIsOpen(!isOpen)}
         className={clsx(
-          "min-h-[32px] px-2 py-1 rounded cursor-pointer transition-all",
-          isOpen ? "bg-blue-50 ring-2 ring-blue-400" : "hover:bg-gray-100",
+          "min-h-6 px-2 py-0.5 rounded cursor-pointer transition-all",
+          isOpen
+            ? "bg-primary-50 ring-2 ring-primary-400"
+            : "hover:bg-gray-100",
           badge && "inline-flex items-center"
         )}
       >
         {badge && color ? (
           <span
-            className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium truncate"
             style={{
               backgroundColor: `${color}20`,
               color: color,
@@ -531,7 +630,7 @@ function SelectCell({ value, options, onChange, badge, color, className }) {
             {value || "Seleccionar"}
           </span>
         ) : (
-          <span className="text-sm">{value || "Seleccionar"}</span>
+          <span className="text-xs truncate">{value || "Seleccionar"}</span>
         )}
       </div>
 
@@ -613,18 +712,18 @@ function PrioridadCell({ value, onChange }) {
   }, [isOpen, popperElement, referenceElement]);
 
   return (
-    <td className="px-4 py-2 relative min-w-[120px]">
+    <td className="px-3 py-1.5 relative min-w-[100px]">
       <div
         ref={setReferenceElement}
         onClick={() => setIsOpen(!isOpen)}
         className={clsx(
-          "min-h-[32px] px-2 py-1 rounded cursor-pointer transition-all inline-flex items-center",
-          isOpen ? "bg-blue-50 ring-2 ring-blue-400" : "hover:bg-gray-100"
+          "min-h-[24px] px-2 py-0.5 rounded cursor-pointer transition-all inline-flex items-center",
+          isOpen ? "bg-primary-50 ring-2 ring-primary-400" : "hover:bg-gray-100"
         )}
       >
         {prioridadActual ? (
           <span
-            className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
             style={{
               backgroundColor: `${prioridadActual.color}20`,
               color: prioridadActual.color,
@@ -699,7 +798,7 @@ function DateCell({ value, onChange }) {
   };
 
   return (
-    <td className="px-4 py-2 min-w-[140px]">
+    <td className="px-3 py-1.5 border-r min-w-[120px]">
       {editing ? (
         <input
           type="date"
@@ -710,16 +809,17 @@ function DateCell({ value, onChange }) {
             if (e.key === "Enter") handleSave();
             if (e.key === "Escape") {
               setCurrentValue(value || "");
-              setEditing(false);
+              className =
+                "w-full px-2 py-0.5 text-xs border rounded bg-primary-50 ring-2 ring-primary-400 outline-none";
             }
           }}
           autoFocus
-          className="w-full px-2 py-1 text-sm border rounded bg-blue-50 ring-2 ring-blue-400 outline-none"
+          className="w-full px-2 py-0.5 text-xs border rounded bg-primary-50 ring-2 ring-primary-400 outline-none"
         />
       ) : (
         <div
           onClick={() => setEditing(true)}
-          className="min-h-[32px] px-2 py-1 rounded hover:bg-gray-100 cursor-pointer transition-all flex items-center text-sm"
+          className="min-h-6 px-2 py-0.5 rounded hover:bg-gray-100 cursor-pointer transition-all flex items-center text-xs"
         >
           {value ? formatearFecha(value) : "Sin fecha"}
         </div>
