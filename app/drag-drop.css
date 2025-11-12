@@ -1,0 +1,33 @@
+/* Estilos adicionales para mejorar el drag & drop de tareas */
+
+/* Animación para el handle de arrastre */
+@keyframes pulse-drag {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* Clase para el handle cuando se hace hover */
+.drag-handle-active {
+  animation: pulse-drag 2s ease-in-out infinite;
+}
+
+/* Mejorar el cursor durante el drag */
+.dragging-cursor * {
+  cursor: grabbing !important;
+}
+
+/* Estilo para las filas durante el drag over */
+.drag-over-row {
+  background-color: rgba(59, 130, 246, 0.1);
+  border-top: 2px solid #3b82f6;
+}
+
+/* Sombra para la fila siendo arrastrada */
+.dragging-row {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  transform: scale(1.02);
+}
