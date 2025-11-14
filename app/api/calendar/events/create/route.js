@@ -6,7 +6,8 @@ export async function POST(request) {
     const body = await request.json();
     console.log("📅 Recibiendo petición para crear evento:", body);
 
-    const { title, description, start, end, location, attendees } = body;
+    const { title, description, start, end, location, attendees, taskId } =
+      body;
 
     // Validar campos requeridos
     if (!title || !start || !end) {
@@ -75,10 +76,69 @@ export async function POST(request) {
 
     const calendar = google.calendar({ version: "v3", auth });
 
+    // ANTES de crear, verificar si ya existe un evento para este taskId
+    if (taskId) {
+      try {
+        console.log("🔍 Verificando si ya existe evento para taskId:", taskId);
+
+        const existingEvents = await calendar.events.list({
+          calendarId: process.env.GOOGLE_CALENDAR_ID,
+          maxResults: 250,
+          orderBy: "updated",
+        });
+
+        const alreadyExists = existingEvents.data.items?.find(
+          (event) =>
+            event.extendedProperties?.private?.taskId === taskId ||
+            event.description?.includes(`[Task ID: ${taskId}]`)
+        );
+
+        if (alreadyExists) {
+          console.log(
+            "⚠️ Ya existe un evento para esta tarea, actualizando en lugar de crear..."
+          );
+
+          // Actualizar el evento existente en lugar de crear uno nuevo
+          const updatedEvent = await calendar.events.update({
+            calendarId: process.env.GOOGLE_CALENDAR_ID,
+            eventId: alreadyExists.id,
+            resource: {
+              summary: title,
+              description: taskId
+                ? `${description || ""}
+
+[Task ID: ${taskId}]`
+                : description || "",
+              start: { dateTime: start, timeZone: "America/Lima" },
+              end: { dateTime: end, timeZone: "America/Lima" },
+            },
+            sendUpdates: "none",
+          });
+
+          return NextResponse.json({
+            success: true,
+            event: {
+              id: updatedEvent.data.id,
+              title: updatedEvent.data.summary,
+              start: updatedEvent.data.start.dateTime,
+              end: updatedEvent.data.end.dateTime,
+              htmlLink: updatedEvent.data.htmlLink,
+            },
+            message: "Evento actualizado (ya existía)",
+          });
+        }
+      } catch (checkError) {
+        console.warn("⚠️ Error verificando eventos existentes:", checkError);
+        // Continuar con la creación normal si falla la verificación
+      }
+    }
+
     // Crear evento
     const event = {
       summary: title,
-      description: description || "",
+      description: taskId
+        ? `${description || ""}\n\n[Task ID: ${taskId}]`
+        : description || "",
       location: location || "",
       start: {
         dateTime: start,
@@ -88,6 +148,14 @@ export async function POST(request) {
         dateTime: end,
         timeZone: "America/Lima",
       },
+      // Guardar taskId en extended properties para búsqueda futura
+      extendedProperties: taskId
+        ? {
+            private: {
+              taskId: taskId,
+            },
+          }
+        : undefined,
       // NO incluir attendees cuando se usa Service Account sin Domain-Wide Delegation
       // attendees: attendees ? attendees.map((email) => ({ email })) : [],
       reminders: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import ContentEditable from "react-contenteditable";
 import { createPortal } from "react-dom";
@@ -18,6 +18,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
       nombre: "",
       titulo: "",
       descripcion: "",
+      observaciones: "",
       prioridad: "media",
       fecha_vencimiento: null,
       proceso_id: null,
@@ -25,6 +26,13 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
       empleado_asignado_id: null,
     }
   );
+
+  // Estado local para el título (evita actualizar DB en cada tecla)
+  const [tituloLocal, setTituloLocal] = useState("");
+  const valorAnteriorTitulo = useRef("");
+
+  // Ref para prevenir llamadas duplicadas al calendario
+  const calendarioEnProgreso = useRef(new Set());
 
   // Catálogos
   const [procesos, setProcesos] = useState([]);
@@ -39,6 +47,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
           nombre: "",
           titulo: "",
           descripcion: "",
+          observaciones: "",
           prioridad: "media",
           fecha_vencimiento: null,
           proceso_id: null,
@@ -48,6 +57,19 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
       );
     }
   }, [isOpen, tarea]);
+
+  // Actualizar tareaLocal cuando tarea cambia (incluso si el panel ya está abierto)
+  useEffect(() => {
+    if (tarea && isOpen) {
+      console.log("🔄 Actualizando tareaLocal con:", {
+        id: tarea.id,
+        nombre: tarea.nombre,
+        descripcion: tarea.descripcion,
+        observaciones: tarea.observaciones,
+      });
+      setTareaLocal(tarea);
+    }
+  }, [tarea, isOpen]);
 
   // Suscripción en tiempo real para actualizar el panel cuando cambie la tarea
   useEffect(() => {
@@ -64,8 +86,14 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
           filter: `id=eq.${tarea.id}`,
         },
         (payload) => {
-          console.log("Tarea actualizada en tiempo real:", payload);
+          // Actualizar solo los campos que cambiaron
           setTareaLocal((prev) => ({ ...prev, ...payload.new }));
+
+          // Actualizar título local si cambió
+          if (payload.new.nombre !== undefined) {
+            setTituloLocal(payload.new.nombre || "");
+            valorAnteriorTitulo.current = payload.new.nombre || "";
+          }
         }
       )
       .subscribe();
@@ -74,6 +102,18 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
       supabase.removeChannel(channel);
     };
   }, [tarea?.id, isOpen]);
+
+  // Inicializar tituloLocal cuando cambia la tarea
+  useEffect(() => {
+    if (tarea) {
+      const titulo = tarea.nombre || tarea.titulo || "";
+      setTituloLocal(titulo);
+      valorAnteriorTitulo.current = titulo;
+    } else {
+      setTituloLocal("");
+      valorAnteriorTitulo.current = "";
+    }
+  }, [tarea]);
 
   const cargarCatalogos = async () => {
     try {
@@ -98,16 +138,54 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
     }
   };
 
+  // Guardar título solo en blur o Enter
+  const guardarTitulo = async () => {
+    const nuevoTitulo = tituloLocal.trim();
+
+    // Si no hay cambios, no hacer nada
+    if (nuevoTitulo === valorAnteriorTitulo.current) {
+      return;
+    }
+
+    // Validar que no esté vacío
+    if (!nuevoTitulo) {
+      toast.error("El título no puede estar vacío");
+      setTituloLocal(valorAnteriorTitulo.current);
+      return;
+    }
+
+    // Si es una tarea existente, actualizar en DB
+    if (tarea?.id) {
+      const { error } = await supabase
+        .from("tareas")
+        .update({ nombre: nuevoTitulo })
+        .eq("id", tarea.id);
+
+      if (error) {
+        console.error("Error actualizando título:", error);
+        toast.error("Error al guardar el título");
+        setTituloLocal(valorAnteriorTitulo.current);
+        return;
+      }
+
+      toast.success("Título actualizado");
+      valorAnteriorTitulo.current = nuevoTitulo;
+      setTareaLocal((prev) => ({ ...prev, nombre: nuevoTitulo }));
+    } else {
+      // Si es nueva, solo actualizar estado local
+      setTareaLocal((prev) => ({
+        ...prev,
+        nombre: nuevoTitulo,
+        titulo: nuevoTitulo,
+      }));
+      valorAnteriorTitulo.current = nuevoTitulo;
+    }
+  };
+
   const actualizarCampo = async (campo, valor) => {
     try {
       // Si no hay ID, es modo creación - actualizar localmente
       if (!tarea?.id) {
-        console.log(
-          "Modo creación - campo actualizado localmente:",
-          campo,
-          valor
-        );
-
         // Actualizar el campo y buscar el objeto completo si es una relación
         const updates = { [campo]: valor };
 
@@ -126,15 +204,151 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
         return;
       }
 
-      // Actualizar tarea existente (modo edición)
+      // Modo edición: verificar si es cambio de estado a "completada"
+      let datosActualizacion = { [campo]: valor };
+      let esCompletada = false;
+
+      if (campo === "estado_id") {
+        const estadoSeleccionado = estados.find((e) => e.id === valor);
+        esCompletada =
+          estadoSeleccionado?.nombre?.toLowerCase() === "completada";
+        if (esCompletada) {
+          datosActualizacion.fecha_completada = new Date().toISOString();
+        } else {
+          datosActualizacion.fecha_completada = null;
+        }
+      }
+
+      // Actualizar tarea existente
       const { error } = await supabase
         .from("tareas")
-        .update({ [campo]: valor })
+        .update(datosActualizacion)
         .eq("id", tarea.id);
 
       if (error) throw error;
 
-      onUpdate?.();
+      // Actualizar estado local para reflejar cambios inmediatamente
+      setTareaLocal((prev) => ({ ...prev, ...datosActualizacion }));
+
+      toast.success("Actualizado correctamente");
+
+      // Si se marcó como completada, actualizar título en Google Calendar
+      if (esCompletada) {
+        const calendarioKey = `estado-${tarea.id}`;
+        if (!calendarioEnProgreso.current.has(calendarioKey)) {
+          calendarioEnProgreso.current.add(calendarioKey);
+
+          try {
+            const response = await fetch("/api/calendar/events/update", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                taskId: tarea.id,
+                title: `✅ [TAREA TERMINADA] ${
+                  tareaLocal.nombre || tarea.nombre
+                }`,
+                completed: true,
+              }),
+            });
+
+            if (response.ok) {
+              console.log(
+                "✅ Evento marcado como completado en Google Calendar"
+              );
+            } else if (response.status === 404) {
+              console.log(
+                "⚠️ Evento no encontrado en calendario (ya fue eliminado o no existía)"
+              );
+            }
+          } catch (calError) {
+            console.warn(
+              "⚠️ Error actualizando estado en calendario:",
+              calError
+            );
+          } finally {
+            setTimeout(() => {
+              calendarioEnProgreso.current.delete(calendarioKey);
+            }, 1000);
+          }
+        }
+      }
+
+      // Si se actualizó la fecha de vencimiento, actualizar evento en Google Calendar
+      if (campo === "fecha_vencimiento" && valor) {
+        const calendarioKey = `fecha-${tarea.id}`;
+        if (!calendarioEnProgreso.current.has(calendarioKey)) {
+          calendarioEnProgreso.current.add(calendarioKey);
+
+          try {
+            // Crear fecha en hora local sin conversión de timezone
+            const [year, month, day] = valor.split("-");
+            const fechaVencimiento = new Date(
+              parseInt(year),
+              parseInt(month) - 1,
+              parseInt(day),
+              9,
+              0,
+              0
+            );
+            const fechaFin = new Date(fechaVencimiento);
+            fechaFin.setHours(10, 0, 0, 0);
+
+            const response = await fetch("/api/calendar/events/update", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                taskId: tarea.id,
+                title: `[TAREA] ${tareaLocal.nombre || tarea.nombre}`,
+                description:
+                  tareaLocal.descripcion ||
+                  tarea.descripcion ||
+                  "Tarea pendiente",
+                start: fechaVencimiento.toISOString(),
+                end: fechaFin.toISOString(),
+              }),
+            });
+
+            if (response.ok) {
+              console.log("✅ Evento actualizado en Google Calendar");
+            } else if (response.status === 404) {
+              // Si no existe evento, crear uno nuevo
+              console.log("📅 Evento no existe, creando nuevo...");
+              await fetch("/api/calendar/events/create", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  title: `[TAREA] ${tareaLocal.nombre || tarea.nombre}`,
+                  description:
+                    tareaLocal.descripcion ||
+                    tarea.descripcion ||
+                    "Tarea pendiente",
+                  start: fechaVencimiento.toISOString(),
+                  end: fechaFin.toISOString(),
+                  taskId: tarea.id,
+                }),
+              });
+            } else {
+              const errorData = await response.json();
+              console.warn(
+                "⚠️ No se pudo actualizar evento en calendario:",
+                errorData
+              );
+            }
+          } catch (calError) {
+            console.warn(
+              "⚠️ Error al actualizar evento en calendario:",
+              calError
+            );
+          } finally {
+            setTimeout(() => {
+              calendarioEnProgreso.current.delete(calendarioKey);
+            }, 1000);
+          }
+        }
+      }
+
+      // NO llamar onUpdate() para evitar recargar toda la tabla
+      // La suscripción en tiempo real se encargará de actualizar
     } catch (error) {
       console.error("Error actualizando:", error);
       toast.error("Error al actualizar: " + error.message);
@@ -173,7 +387,55 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
 
       if (error) throw error;
 
-      toast.success("Tarea creada exitosamente");
+      // Crear evento en Google Calendar si hay fecha de vencimiento
+      if (data && nuevaTarea.fecha_vencimiento) {
+        try {
+          // Crear fecha en hora local sin conversión de timezone
+          const [year, month, day] = nuevaTarea.fecha_vencimiento.split("-");
+          const fechaVencimiento = new Date(
+            parseInt(year),
+            parseInt(month) - 1,
+            parseInt(day),
+            9,
+            0,
+            0
+          );
+          const fechaFin = new Date(fechaVencimiento);
+          fechaFin.setHours(10, 0, 0, 0);
+
+          const response = await fetch("/api/calendar/events/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: `[TAREA] ${nuevaTarea.nombre}`,
+              description: nuevaTarea.descripcion || "Tarea pendiente",
+              start: fechaVencimiento.toISOString(),
+              end: fechaFin.toISOString(),
+              taskId: data.id,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error("❌ Error al crear evento en calendario:", errorData);
+            toast.error(
+              `Tarea creada, pero no se pudo crear evento en calendario: ${
+                errorData.error || "Error desconocido"
+              }`
+            );
+          } else {
+            console.log("✅ Evento creado en Google Calendar");
+            toast.success("Tarea y evento creados exitosamente");
+          }
+        } catch (calError) {
+          console.error("❌ Error de red al crear evento:", calError);
+          toast.warning(
+            "Tarea creada, pero hubo un problema al crear el evento en el calendario"
+          );
+        }
+      } else {
+        toast.success("Tarea creada exitosamente");
+      }
       onUpdate?.();
       onClose();
     } catch (error) {
@@ -223,22 +485,26 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
             {/* Header minimalista */}
             <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-[10000]">
               <div className="flex-1 min-w-0 mr-4">
-                {!tarea?.id ? (
-                  <input
-                    type="text"
-                    value={tareaLocal?.titulo || tareaLocal?.nombre || ""}
-                    onChange={(e) => actualizarCampo("titulo", e.target.value)}
-                    placeholder="Título de la tarea..."
-                    className="text-xl font-semibold text-gray-900 bg-transparent border-b-2 border-primary-400 outline-none w-full focus:border-primary-600 rounded-lg px-2"
-                    autoFocus
-                  />
-                ) : (
-                  <h2 className="text-xl font-semibold text-gray-900 truncate">
-                    {tareaLocal?.nombre ||
-                      tareaLocal?.titulo ||
-                      "Tarea sin título"}
-                  </h2>
-                )}
+                <input
+                  type="text"
+                  value={tituloLocal}
+                  onChange={(e) => setTituloLocal(e.target.value)}
+                  onBlur={guardarTitulo}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      e.target.blur(); // Esto dispara el guardarTitulo
+                    }
+                  }}
+                  placeholder="Título de la tarea..."
+                  className={clsx(
+                    "text-xl font-semibold text-gray-900 bg-transparent outline-none w-full rounded px-2 transition-colors",
+                    !tarea?.id
+                      ? "border-b-2 border-primary-400 focus:border-primary-600"
+                      : "border-b border-transparent hover:border-gray-300 focus:border-primary-400"
+                  )}
+                  autoFocus={!tarea?.id}
+                />
               </div>
               <div className="flex items-center gap-2">
                 {!tarea?.id && (
@@ -375,17 +641,6 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
 
               <PropertyRow
                 icon={<Calendar className="w-3.5 h-3.5" />}
-                label="Recordatorio"
-              >
-                <EditableDateWithTime
-                  value={tareaLocal.fecha_limite}
-                  onUpdate={(val) => actualizarCampo("fecha_limite", val)}
-                  compact
-                />
-              </PropertyRow>
-
-              <PropertyRow
-                icon={<Calendar className="w-3.5 h-3.5" />}
                 label="Vencimiento"
               >
                 <EditableDate
@@ -395,7 +650,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                 />
               </PropertyRow>
 
-              {tarea.fecha_completada && (
+              {tareaLocal.fecha_completada && (
                 <PropertyRow
                   icon={<Calendar className="w-3.5 h-3.5" />}
                   label="Completada"
@@ -467,71 +722,90 @@ function PropertyRow({ icon, label, children }) {
   );
 }
 
-// Componente de texto editable compacto
+// Componente de texto editable optimizado
 function EditableText({ value, onUpdate, multiline = false, placeholder }) {
   const [editing, setEditing] = useState(false);
   const [currentValue, setCurrentValue] = useState(value || "");
-  const contentRef = useRef();
+  const inputRef = useRef();
+  const valorInicialRef = useRef("");
 
+  // Solo actualizar cuando NO estamos editando
   useEffect(() => {
-    setCurrentValue(value || "");
-  }, [value]);
+    if (!editing) {
+      setCurrentValue(value || "");
+    }
+  }, [value, editing]);
 
+  // Auto-focus cuando entra en modo edición
   useEffect(() => {
-    if (editing && contentRef.current) {
-      const range = document.createRange();
-      const sel = window.getSelection();
-
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
       if (multiline) {
-        contentRef.current.focus();
-        range.selectNodeContents(contentRef.current);
-        range.collapse(false);
-        sel.removeAllRanges();
-        sel.addRange(range);
-      } else {
-        contentRef.current.focus();
-        range.selectNodeContents(contentRef.current);
-        range.collapse(false);
-        sel.removeAllRanges();
-        sel.addRange(range);
+        const len = inputRef.current.value.length;
+        inputRef.current.setSelectionRange(len, len);
       }
     }
-  }, [editing, value, multiline]);
+  }, [editing, multiline]);
 
-  const handleSave = () => {
-    setEditing(false);
-    if (currentValue.trim() !== value) {
-      onUpdate(currentValue.trim());
+  const handleStartEdit = useCallback(() => {
+    valorInicialRef.current = currentValue || "";
+    setEditing(true);
+  }, [currentValue]);
+
+  const handleSave = useCallback(() => {
+    const valorActualLimpio = currentValue.trim();
+    const valorInicialLimpio = valorInicialRef.current.trim();
+
+    // Solo guardar si hay cambios reales
+    if (valorActualLimpio !== valorInicialLimpio) {
+      onUpdate(valorActualLimpio);
     }
-  };
+
+    setEditing(false);
+  }, [currentValue, onUpdate]);
+
+  const handleKeyDown = useCallback(
+    (e) => {
+      if (e.key === "Enter" && !multiline) {
+        e.preventDefault();
+        handleSave();
+      }
+      if (e.key === "Escape") {
+        setCurrentValue(valorInicialRef.current);
+        setEditing(false);
+      }
+    },
+    [multiline, handleSave]
+  );
 
   return (
     <div className="w-full">
       {editing ? (
-        <ContentEditable
-          innerRef={contentRef}
-          html={currentValue}
-          onChange={(e) => setCurrentValue(e.target.value)}
-          onBlur={handleSave}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !multiline) {
-              e.preventDefault();
-              handleSave();
-            }
-            if (e.key === "Escape") {
-              setCurrentValue(value || "");
-              setEditing(false);
-            }
-          }}
-          className={clsx(
-            "w-full px-2 py-1 text-sm border-2 border-primary-400 rounded outline-none bg-primary-50",
-            multiline ? "min-h-[100px]" : ""
-          )}
-          tagName={multiline ? "div" : "span"}
-        />
+        multiline ? (
+          <textarea
+            ref={inputRef}
+            value={currentValue}
+            onChange={(e) => setCurrentValue(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={handleKeyDown}
+            className="w-full px-2 py-1 text-sm border-2 border-primary-400 rounded outline-none bg-primary-50 min-h-[100px] resize-y"
+            placeholder={placeholder}
+          />
+        ) : (
+          <input
+            ref={inputRef}
+            type="text"
+            value={currentValue}
+            onChange={(e) => setCurrentValue(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={handleKeyDown}
+            className="w-full px-2 py-1 text-sm border-2 border-primary-400 rounded outline-none bg-primary-50"
+            placeholder={placeholder}
+          />
+        )
       ) : (
         <div
-          onClick={() => setEditing(true)}
+          onClick={handleStartEdit}
           className={clsx(
             "w-full px-2 py-1 text-sm rounded hover:bg-gray-100 cursor-pointer transition-colors",
             multiline ? "min-h-[100px] whitespace-pre-wrap" : "",

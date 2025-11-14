@@ -42,6 +42,35 @@ export default function TareasPage() {
     cargarTareas();
   }, []);
 
+  // Sincronizar tareaSeleccionada cuando la tabla se actualiza
+  useEffect(() => {
+    if (tareaSeleccionada?.id && tareas.length > 0) {
+      const tareaActualizada = tareas.find(
+        (t) => t.id === tareaSeleccionada.id
+      );
+      if (tareaActualizada) {
+        // Solo actualizar si realmente cambió
+        const hasChanged =
+          JSON.stringify(tareaActualizada) !==
+          JSON.stringify(tareaSeleccionada);
+        if (hasChanged) {
+          console.log("🔄 Sincronizando tareaSeleccionada:", {
+            antes: {
+              descripcion: tareaSeleccionada.descripcion,
+              observaciones: tareaSeleccionada.observaciones,
+            },
+            despues: {
+              descripcion: tareaActualizada.descripcion,
+              observaciones: tareaActualizada.observaciones,
+            },
+          });
+          setTareaSeleccionada(tareaActualizada);
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tareas]);
+
   const cargarTareas = async () => {
     try {
       setLoading(true);
@@ -396,6 +425,7 @@ export default function TareasPage() {
       />
 
       <TareaPanel
+        key={tareaSeleccionada?.id || "new"}
         tarea={tareaSeleccionada}
         isOpen={panelOpen}
         onClose={() => setPanelOpen(false)}

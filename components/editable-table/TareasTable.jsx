@@ -37,6 +37,9 @@ export default function TareasTable({
   const [sortConfig, setSortConfig] = useState(null);
   const [seleccionadas, setSeleccionadas] = useState(new Set());
 
+  // Ref para prevenir llamadas duplicadas al calendario
+  const calendarioEnProgreso = useRef(new Set());
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -63,17 +66,42 @@ export default function TareasTable({
           schema: "public",
           table: "tareas",
         },
-        (payload) => {
+        async (payload) => {
           console.log("Cambio en tareas:", payload);
 
           if (payload.eventType === "INSERT") {
             onUpdate?.();
           } else if (payload.eventType === "UPDATE") {
-            setTareas((prev) =>
-              prev.map((t) =>
-                t.id === payload.new.id ? { ...t, ...payload.new } : t
+            // Fetch completo de la tarea con sus relaciones
+            const { data: tareaActualizada } = await supabase
+              .from("tareas")
+              .select(
+                `
+                *,
+                proceso:procesos(id, nombre),
+                estado:estados_tarea(id, nombre, color),
+                empleado_asignado:empleados(id, nombre, apellido)
+              `
               )
-            );
+              .eq("id", payload.new.id)
+              .single();
+
+            if (tareaActualizada) {
+              console.log("✅ Tarea actualizada desde DB:", {
+                id: tareaActualizada.id,
+                fecha_vencimiento: tareaActualizada.fecha_vencimiento,
+                estado: tareaActualizada.estado?.nombre,
+              });
+              setTareas((prev) => {
+                const index = prev.findIndex(
+                  (t) => t.id === tareaActualizada.id
+                );
+                if (index === -1) return prev;
+                const newTareas = [...prev];
+                newTareas[index] = tareaActualizada;
+                return newTareas;
+              });
+            }
           } else if (payload.eventType === "DELETE") {
             setTareas((prev) => prev.filter((t) => t.id !== payload.old.id));
           }
@@ -160,6 +188,12 @@ export default function TareasTable({
 
   const actualizarCelda = async (tareaId, campo, valor) => {
     try {
+      // Actualizar localmente PRIMERO para UI instantánea
+      setTareas((prev) =>
+        prev.map((t) => (t.id === tareaId ? { ...t, [campo]: valor } : t))
+      );
+
+      // Luego actualizar en base de datos
       const { error } = await supabase
         .from("tareas")
         .update({ [campo]: valor })
@@ -167,30 +201,140 @@ export default function TareasTable({
 
       if (error) throw error;
 
+      // Si se actualiza fecha_vencimiento, también actualizar Google Calendar
+      if (campo === "fecha_vencimiento" && valor) {
+        // Prevenir llamadas duplicadas simultáneas
+        const calendarioKey = `fecha-${tareaId}`;
+        if (calendarioEnProgreso.current.has(calendarioKey)) {
+          console.log(
+            "⏳ Actualización de calendario ya en progreso, omitiendo..."
+          );
+          return;
+        }
+
+        calendarioEnProgreso.current.add(calendarioKey);
+
+        try {
+          const tarea = tareas.find((t) => t.id === tareaId);
+          // Crear fecha en hora local sin conversión de timezone
+          const [year, month, day] = valor.split("-");
+          const fechaVencimiento = new Date(
+            parseInt(year),
+            parseInt(month) - 1,
+            parseInt(day),
+            9,
+            0,
+            0
+          );
+          const fechaFin = new Date(fechaVencimiento);
+          fechaFin.setHours(10, 0, 0, 0);
+
+          const response = await fetch("/api/calendar/events/update", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              taskId: tareaId,
+              title: `[TAREA] ${tarea?.nombre || "Sin título"}`,
+              start: fechaVencimiento.toISOString(),
+              end: fechaFin.toISOString(),
+            }),
+          });
+
+          if (!response.ok && response.status === 404) {
+            // Si no existe evento, crear uno nuevo
+            console.log("📅 Evento no existe, creando nuevo...");
+            await fetch("/api/calendar/events/create", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                title: `[TAREA] ${tarea?.nombre || "Sin título"}`,
+                description: tarea?.descripcion || "Tarea pendiente",
+                start: fechaVencimiento.toISOString(),
+                end: fechaFin.toISOString(),
+                taskId: tareaId,
+              }),
+            });
+          }
+        } catch (calendarError) {
+          console.warn("Error actualizando calendario:", calendarError);
+        } finally {
+          // Limpiar el flag después de un pequeño delay
+          setTimeout(() => {
+            calendarioEnProgreso.current.delete(calendarioKey);
+          }, 1000);
+        }
+      }
+
       if (campo === "proceso_id" && valor) {
         const proceso = procesos.find((p) => p.id === valor);
+        // Actualizar con el objeto completo del proceso
         setTareas((prev) =>
           prev.map((t) => (t.id === tareaId ? { ...t, proceso } : t))
         );
       } else if (campo === "estado_id" && valor) {
         const estado = estados.find((e) => e.id === valor);
+        // Actualizar con el objeto completo del estado
         setTareas((prev) =>
           prev.map((t) => (t.id === tareaId ? { ...t, estado } : t))
         );
-      } else if (campo === "empleado_id" && valor) {
+
+        // Si se marca como completada, actualizar evento en Google Calendar
+        if (estado?.nombre?.toLowerCase() === "completada") {
+          // Prevenir llamadas duplicadas simultáneas
+          const calendarioKey = `estado-${tareaId}`;
+          if (calendarioEnProgreso.current.has(calendarioKey)) {
+            console.log(
+              "⏳ Actualización de estado en calendario ya en progreso, omitiendo..."
+            );
+            return;
+          }
+
+          calendarioEnProgreso.current.add(calendarioKey);
+
+          try {
+            const tarea = tareas.find((t) => t.id === tareaId);
+            const response = await fetch("/api/calendar/events/update", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                taskId: tareaId,
+                title: `✅ [TAREA TERMINADA] ${tarea?.nombre || "Sin título"}`,
+                completed: true,
+              }),
+            });
+
+            if (response.ok) {
+              console.log("✅ Tarea marcada como completada en calendario");
+            } else if (response.status === 404) {
+              console.log(
+                "⚠️ Evento no encontrado en calendario (ya fue eliminado o no existía)"
+              );
+            }
+          } catch (calendarError) {
+            console.warn(
+              "Error actualizando estado en calendario:",
+              calendarError
+            );
+          } finally {
+            // Limpiar el flag después de un pequeño delay
+            setTimeout(() => {
+              calendarioEnProgreso.current.delete(calendarioKey);
+            }, 1000);
+          }
+        }
+      } else if (campo === "empleado_asignado_id" && valor) {
         const empleado = empleados.find((e) => e.id === valor);
+        // Actualizar con el objeto completo del empleado
         setTareas((prev) =>
           prev.map((t) =>
             t.id === tareaId ? { ...t, empleado_asignado: empleado } : t
           )
         );
-      } else {
-        setTareas((prev) =>
-          prev.map((t) => (t.id === tareaId ? { ...t, [campo]: valor } : t))
-        );
       }
     } catch (error) {
       console.error("Error actualizando:", error);
+      // Revertir cambio local si falla
+      setTareas((prev) => [...prev]);
     }
   };
 
@@ -272,10 +416,29 @@ export default function TareasTable({
     if (!confirm(mensaje)) return;
 
     try {
+      const tareasIds = Array.from(seleccionadas);
+
+      // Eliminar eventos de Google Calendar para cada tarea
+      for (const tareaId of tareasIds) {
+        try {
+          await fetch("/api/calendar/events/delete", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ taskId: tareaId }),
+          });
+        } catch (calError) {
+          console.warn(
+            `Error eliminando evento de calendario para tarea ${tareaId}:`,
+            calError
+          );
+        }
+      }
+
+      // Eliminar tareas de la base de datos
       const { error } = await supabase
         .from("tareas")
         .delete()
-        .in("id", Array.from(seleccionadas));
+        .in("id", tareasIds);
 
       if (error) throw error;
 
@@ -783,7 +946,10 @@ function DateCell({ value, onChange }) {
 
   const formatearFecha = (fecha) => {
     if (!fecha) return "";
-    return new Date(fecha).toLocaleDateString("es-ES", {
+    // Parsear fecha sin conversión UTC
+    const [year, month, day] = fecha.split("-");
+    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    return date.toLocaleDateString("es-ES", {
       day: "2-digit",
       month: "short",
       year: "numeric",
@@ -793,7 +959,9 @@ function DateCell({ value, onChange }) {
   const handleSave = () => {
     setEditing(false);
     if (currentValue !== value) {
-      onChange(currentValue || null);
+      // Asegurar que la fecha se guarde correctamente sin problemas de timezone
+      const fechaCorregida = currentValue ? currentValue : null;
+      onChange(fechaCorregida);
     }
   };
 
