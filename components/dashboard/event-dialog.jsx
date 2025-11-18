@@ -45,8 +45,6 @@ export function EventDialog({
 
   // Actualizar el formulario cuando cambie el evento
   useEffect(() => {
-    console.log("EventDialog - Evento recibido:", event);
-    console.log("EventDialog - Mode:", mode);
 
     if (event) {
       const newFormData = {
@@ -56,8 +54,6 @@ export function EventDialog({
         end: formatDateForInput(event.end),
         location: event.extendedProps?.location || "",
       };
-
-      console.log("EventDialog - Form data a establecer:", newFormData);
       setFormData(newFormData);
     } else {
       // Limpiar el formulario si no hay evento

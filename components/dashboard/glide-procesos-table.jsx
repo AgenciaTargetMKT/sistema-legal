@@ -282,7 +282,7 @@ export default function GlideProcesosTable({
       const proceso = procesos[row];
       const columnId = columns[col].id;
 
-      console.log("✏️ Editando celda:", { columnId, row, newValue });
+  
 
       let updateValue;
       let updateField = columnId;
@@ -310,7 +310,6 @@ export default function GlideProcesosTable({
         }
       }
 
-      console.log("💾 Valor a guardar:", updateValue, "Campo:", updateField);
 
       try {
         // Caso especial: si es la columna de última actualización, crear un nuevo comentario
@@ -319,8 +318,6 @@ export default function GlideProcesosTable({
             alert("El comentario no puede estar vacío");
             return;
           }
-
-          console.log("💬 Creando nuevo comentario...");
 
           // Insertar nuevo comentario
           const { data: nuevoComentario, error: errorComentario } =
@@ -339,9 +336,6 @@ export default function GlideProcesosTable({
             alert("Error al crear comentario: " + errorComentario.message);
             return;
           }
-
-          console.log("✅ Comentario creado:", nuevoComentario);
-
           // Actualizar estado local con el nuevo comentario
           const newProcesos = [...procesos];
           newProcesos[row] = {
@@ -368,8 +362,6 @@ export default function GlideProcesosTable({
           alert("Error al actualizar: " + error.message);
           return;
         }
-
-        console.log("✅ Guardado exitoso");
 
         // Si fue un dropdown (cliente o estado), recargar para obtener los datos completos
         if (columnId === "cliente" || columnId === "estado") {

@@ -66,7 +66,7 @@ export default function ProcesosTable({
           table: "procesos",
         },
         (payload) => {
-          console.log("Cambio en procesos:", payload);
+       
 
           if (payload.eventType === "INSERT") {
             // Recargar todo cuando se inserta un nuevo proceso
@@ -103,7 +103,7 @@ export default function ProcesosTable({
           table: "comentarios",
         },
         async (payload) => {
-          console.log("Cambio en comentarios:", payload);
+        
 
           if (
             payload.eventType === "INSERT" ||

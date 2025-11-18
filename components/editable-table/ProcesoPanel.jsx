@@ -97,11 +97,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
     try {
       // Si no hay ID, es modo creación - actualizar localmente
       if (!proceso?.id) {
-        console.log(
-          "Modo creación - campo actualizado localmente:",
-          campo,
-          valor
-        );
+       
 
         // Actualizar el campo y buscar el objeto completo si es una relación
         const updates = { [campo]: valor };
@@ -258,7 +254,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
           filter: `proceso_id=eq.${proceso.id}`,
         },
         async (payload) => {
-          console.log("Cambio en comentarios:", payload);
+        
 
           if (payload.eventType === "INSERT") {
             // Cargar el comentario completo con la relación de empleado
@@ -379,7 +375,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
           filter: `proceso_id=eq.${proceso.id}`,
         },
         async (payload) => {
-          console.log("Cambio en tareas:", payload);
+       
 
           if (payload.eventType === "INSERT") {
             const { data } = await supabase

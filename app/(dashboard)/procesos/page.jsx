@@ -13,8 +13,6 @@ import {
 } from "@/components/ui/card";
 import ProcesosTable from "@/components/editable-table/ProcesosTable";
 import ProcesoPanel from "@/components/editable-table/ProcesoPanel";
-
-import ProcesoDialog from "@/components/dashboard/proceso-dialog";
 import {
   Scale,
   Plus,
@@ -429,21 +427,9 @@ export default function ProcesosPage() {
         onUpdate={cargarProcesos}
       />
 
-      {/* Diálogo de Nueva Tarea */}
-      <TareaDialog
-        open={tareaDialogOpen}
-        onOpenChange={setTareaDialogOpen}
-        tarea={tareaInicial}
-        onSuccess={handleTareaSuccess}
-      />
+     
 
-      {/* Diálogo de Crear/Editar Proceso */}
-      <ProcesoDialog
-        open={procesoDialogOpen}
-        onOpenChange={setProcesoDialogOpen}
-        proceso={procesoEditar}
-        onSuccess={handleProcesoSuccess}
-      />
+     
     </div>
   );
 }

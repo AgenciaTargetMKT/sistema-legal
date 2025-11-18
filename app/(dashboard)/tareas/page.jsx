@@ -44,26 +44,40 @@ export default function TareasPage() {
     cargarTareas();
   }, []);
 
+  // Suscripción en tiempo real para INSERT de nuevas tareas
+  useEffect(() => {
+    const channel = supabase
+      .channel("tareas-changes-page")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "tareas",
+        },
+        async (payload) => {
+        
+          await cargarTareas();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   // Sincronizar tareaSeleccionada cuando la tabla se actualiza
   // SOLO si el panel está abierto Y hay una tarea seleccionada (no nueva tarea)
   useEffect(() => {
     // No sincronizar si el panel está cerrado o es una nueva tarea (tareaSeleccionada es null)
     if (!panelOpen || !tareaSeleccionada?.id) {
-      console.log("⏭️ No sincronizar:", {
-        panelOpen,
-        tieneId: !!tareaSeleccionada?.id,
-      });
       return;
     }
 
     const tareaActualizada = tareas.find((t) => t.id === tareaSeleccionada.id);
 
     if (tareaActualizada) {
-      console.log("🔄 Sincronizando tareaSeleccionada con cambios de tabla:", {
-        id: tareaActualizada.id,
-        nombre: tareaActualizada.nombre,
-        estado: tareaActualizada.estado?.nombre,
-      });
       setTareaSeleccionada(tareaActualizada);
     }
   }, [tareas, panelOpen, tareaSeleccionada?.id]); // IMPORTANTE: incluir panelOpen y tareaSeleccionada?.id
@@ -90,7 +104,6 @@ export default function TareasPage() {
         throw error;
       }
 
-      console.log("✅ Tareas cargadas:", data?.length, "tareas");
       setTareas(data || []);
     } catch (error) {
       console.error("Error al cargar tareas:", error);
@@ -101,8 +114,6 @@ export default function TareasPage() {
   };
 
   const handleNuevaTarea = () => {
-    console.log("➕ Abriendo panel para nueva tarea");
-    // Primero cerrar el panel si estaba abierto
     if (panelOpen) {
       setPanelOpen(false);
       // Esperar a que se cierre antes de abrir con nueva tarea
@@ -118,7 +129,6 @@ export default function TareasPage() {
   };
 
   const handleEditarTarea = (tarea) => {
-    console.log("✏️ Abriendo panel para editar tarea:", tarea.id);
     setTareaSeleccionada(tarea);
     setPanelOpen(true);
   };
@@ -206,16 +216,6 @@ export default function TareasPage() {
         className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
       >
         <motion.div
-          initial={{ scale: 0.95 }}
-          animate={{ scale: 1 }}
-          transition={{ duration: 0.3, delay: 0.2 }}
-        >
-          <h1 className="text-3xl font-bold tracking-tight">Tareas</h1>
-          <p className="text-muted-foreground">
-            Gestiona las tareas de tus procesos legales
-          </p>
-        </motion.div>
-        <motion.div
           initial={{ x: 20, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           transition={{ duration: 0.4, delay: 0.25 }}
@@ -294,29 +294,31 @@ export default function TareasPage() {
                 </p>
               </div>
             </div>
-          ) : tareasFiltradas.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <CheckSquare className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold">No hay tareas</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                {searchTerm
-                  ? "No se encontraron tareas con ese criterio"
-                  : "Comienza agregando tu primera tarea"}
-              </p>
-              {!searchTerm && (
-                <Button onClick={handleNuevaTarea}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Agregar Tarea
-                </Button>
-              )}
-            </div>
           ) : vistaActual === "tabla" ? (
-            <TareasTable
-              tareas={tareasFiltradas}
-              onUpdate={cargarTareas}
-              onTareaClick={handleEditarTarea}
-              onTareasChange={setTareas}
-            />
+            tareasFiltradas.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <CheckSquare className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold">No hay tareas</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {searchTerm
+                    ? "No se encontraron tareas con ese criterio"
+                    : "Comienza agregando tu primera tarea"}
+                </p>
+                {!searchTerm && (
+                  <Button onClick={handleNuevaTarea}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Agregar Tarea
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <TareasTable
+                tareas={tareasFiltradas}
+                onUpdate={cargarTareas}
+                onTareaClick={handleEditarTarea}
+                onTareasChange={setTareas}
+              />
+            )
           ) : (
             <div className="space-y-3">
               {tareasFiltradas.map((tarea, index) => {
@@ -460,8 +462,6 @@ export default function TareasPage() {
         </CardContent>
       </motion.div>
 
-
-
       <TareaPanel
         key={
           panelOpen ? tareaSeleccionada?.id || `new-${Date.now()}` : "closed"
@@ -469,7 +469,6 @@ export default function TareasPage() {
         tarea={tareaSeleccionada}
         isOpen={panelOpen}
         onClose={() => {
-          console.log("🚪 Cerrando panel");
           setPanelOpen(false);
           // Limpiar tareaSeleccionada después de un pequeño delay para que la animación termine
           setTimeout(() => {

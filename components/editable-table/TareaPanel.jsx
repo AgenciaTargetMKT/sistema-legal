@@ -13,6 +13,10 @@ import clsx from "clsx";
 
 export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+
+  // Estado local para tarea actualizada optimísticamente
+  const [tareaLocal, setTareaLocal] = useState(null);
 
   // Estado local SOLO para el título (evita actualizar DB en cada tecla)
   const [tituloLocal, setTituloLocal] = useState("");
@@ -20,6 +24,9 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
 
   // Ref para prevenir llamadas duplicadas al calendario
   const calendarioEnProgreso = useRef(new Set());
+
+  // Estados de carga
+  const [catalogosCargados, setCatalogosCargados] = useState(false);
 
   // Catálogos
   const [procesos, setProcesos] = useState([]);
@@ -31,11 +38,25 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
   // Estado temporal SOLO para nueva tarea (antes de guardar)
   const [nuevaTareaTemp, setNuevaTareaTemp] = useState(null);
 
+  // Estado para tipo de evento (todo el día o con hora)
+  const [esTodoElDia, setEsTodoElDia] = useState(true);
+  const [horaInicio, setHoraInicio] = useState("09:00");
+  const [horaFin, setHoraFin] = useState("10:00");
+
+  // Sincronizar tareaLocal con tarea cuando cambia
+  useEffect(() => {
+    if (tarea?.id) {
+      setTareaLocal(tarea);
+    } else {
+      setTareaLocal(null);
+    }
+  }, [tarea]);
+
   // Inicializar cuando se abre el panel (solo una vez)
   useEffect(() => {
     if (isOpen && !nuevaTareaTemp && !tarea?.id) {
       // Modo creación: inicializar estado temporal
-      console.log("🟢 Inicializando modo CREACIÓN");
+
       setNuevaTareaTemp({
         nombre: "",
         descripcion: "",
@@ -51,42 +72,49 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
       });
       setTituloLocal("");
       valorAnteriorTitulo.current = "";
-      cargarCatalogos();
-      cargarUsuarioActual();
+      if (!catalogosCargados) {
+        cargarCatalogos();
+        cargarUsuarioActual();
+      }
     } else if (isOpen && tarea?.id) {
       // Modo edición: inicializar título solo la primera vez
-      console.log("🔵 Modo EDICIÓN:", tarea.id);
+
       if (!tituloLocal) {
         setTituloLocal(tarea?.nombre || "");
         valorAnteriorTitulo.current = tarea?.nombre || "";
       }
       setNuevaTareaTemp(null);
-      cargarCatalogos();
-      cargarUsuarioActual();
+      if (!catalogosCargados) {
+        cargarCatalogos();
+        cargarUsuarioActual();
+      }
       // Cargar empleados desde las tablas de relación
       cargarEmpleadosTarea(tarea.id);
     }
 
     if (!isOpen) {
-      // Cuando se cierra el panel, resetear
-      console.log("🔴 Cerrando panel - limpiando estado");
       setNuevaTareaTemp(null);
       setTituloLocal("");
       valorAnteriorTitulo.current = "";
+      setTareaLocal(null);
     }
   }, [isOpen, tarea?.id]); // Solo escuchar cambios en isOpen y tarea?.id
 
   // Sincronizar título cuando tarea cambia (solo en modo edición y si el panel está abierto)
   useEffect(() => {
     if (isOpen && tarea?.id && tarea?.nombre !== tituloLocal) {
-      console.log(
-        "🔄 Sincronizando título con tarea actualizada:",
-        tarea.nombre
-      );
       setTituloLocal(tarea.nombre || "");
       valorAnteriorTitulo.current = tarea.nombre || "";
     }
   }, [tarea?.nombre, isOpen, tarea?.id]);
+
+  // Cargar catálogos al inicializar el componente
+  useEffect(() => {
+    if (!catalogosCargados) {
+      cargarCatalogos();
+      cargarUsuarioActual();
+    }
+  }, [catalogosCargados]);
 
   const cargarUsuarioActual = async () => {
     try {
@@ -153,9 +181,19 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
         const empleadosResponsables =
           responsables?.map((r) => r.empleado).filter(Boolean) || [];
 
+        // Asegurarse de que los empleados tengan la estructura correcta
+        const formatearEmpleados = (empleados) =>
+          empleados.map((emp) => ({
+            id: emp.id,
+            nombre: emp.nombre || "Sin nombre",
+            apellido: emp.apellido || "",
+          }));
+
         // Actualizar directamente en la tarea
-        tarea.empleados_designados = empleadosDesignados;
-        tarea.empleados_responsables = empleadosResponsables;
+        tarea.empleados_designados = formatearEmpleados(empleadosDesignados);
+        tarea.empleados_responsables = formatearEmpleados(
+          empleadosResponsables
+        );
       }
     } catch (error) {
       console.error("Error al cargar empleados de la tarea:", error);
@@ -187,9 +225,30 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
       if (procesosRes.data) setProcesos(procesosRes.data);
       if (clientesRes.data) setClientes(clientesRes.data);
       if (estadosRes.data) setEstados(estadosRes.data);
-      if (empleadosRes.data) setEmpleados(empleadosRes.data);
+      if (empleadosRes.data) {
+        setEmpleados(empleadosRes.data);
+      } else {
+        console.warn(
+          "⚠️ No se pudieron cargar empleados - verificar política RLS"
+        );
+        // Cargar empleado actual como fallback
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData?.user) {
+          const { data: empleadoActual } = await supabase
+            .from("empleados")
+            .select("id, nombre, apellido")
+            .eq("auth_user_id", userData.user.id)
+            .single();
+          if (empleadoActual) {
+            setEmpleados([empleadoActual]);
+          }
+        }
+      }
+      setCatalogosCargados(true);
+      setInitialLoading(false);
     } catch (error) {
       console.error("Error cargando catálogos:", error);
+      setInitialLoading(false);
     }
   };
 
@@ -253,8 +312,6 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
     try {
       // Si no hay ID, es modo creación - actualizar nuevaTareaTemp
       if (!tarea?.id) {
-        console.log("🆕 Actualizando nuevaTareaTemp:", campo, valor);
-
         // Actualizar el campo y buscar el objeto completo si es una relación
         const updates = { [campo]: valor };
 
@@ -265,29 +322,33 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
           const estado = estados.find((e) => e.id === valor);
           if (estado) updates.estado = estado;
         } else if (campo === "empleados_designados") {
-          // Convertir array de opciones a array de objetos empleado
-          updates.empleados_designados = valor.map((opt) => {
-            const emp = empleados.find((e) => e.id === opt.value);
-            return (
-              emp || {
-                id: opt.value,
-                nombre: opt.label.split(" ")[0],
-                apellido: opt.label.split(" ").slice(1).join(" "),
-              }
-            );
-          });
+          // Convertir array de opciones a array de objetos empleado (solo IDs válidos)
+          updates.empleados_designados = valor
+            .filter((opt) => opt.value && opt.value !== null)
+            .map((opt) => {
+              const emp = empleados.find((e) => e.id === opt.value);
+              return (
+                emp || {
+                  id: opt.value,
+                  nombre: opt.label.split(" ")[0],
+                  apellido: opt.label.split(" ").slice(1).join(" "),
+                }
+              );
+            });
         } else if (campo === "empleados_responsables") {
-          // Convertir array de opciones a array de objetos empleado
-          updates.empleados_responsables = valor.map((opt) => {
-            const emp = empleados.find((e) => e.id === opt.value);
-            return (
-              emp || {
-                id: opt.value,
-                nombre: opt.label.split(" ")[0],
-                apellido: opt.label.split(" ").slice(1).join(" "),
-              }
-            );
-          });
+          // Convertir array de opciones a array de objetos empleado (solo IDs válidos)
+          updates.empleados_responsables = valor
+            .filter((opt) => opt.value && opt.value !== null)
+            .map((opt) => {
+              const emp = empleados.find((e) => e.id === opt.value);
+              return (
+                emp || {
+                  id: opt.value,
+                  nombre: opt.label.split(" ")[0],
+                  apellido: opt.label.split(" ").slice(1).join(" "),
+                }
+              );
+            });
         }
 
         // Actualizar nuevaTareaTemp con los cambios
@@ -303,7 +364,39 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
         campo === "empleados_designados" ||
         campo === "empleados_responsables"
       ) {
-        const empleadosIds = valor.map((opt) => opt.value);
+        // Filtrar empleados válidos (con ID no null/undefined)
+        const empleadosValidos = valor.filter(
+          (opt) => opt.value && opt.value !== null
+        );
+        const empleadosIds = empleadosValidos.map((opt) => opt.value);
+
+        const empleadosActualizados = empleadosValidos.map((opt) => {
+          const emp = empleados.find((e) => e.id === opt.value);
+          return emp
+            ? {
+                ...emp,
+                empleado_id: emp.id,
+                empleado: emp,
+              }
+            : {
+                id: opt.value,
+                empleado_id: opt.value,
+                nombre: opt.label.split(" ")[0],
+                apellido: opt.label.split(" ").slice(1).join(" "),
+                empleado: {
+                  id: opt.value,
+                  nombre: opt.label.split(" ")[0],
+                  apellido: opt.label.split(" ").slice(1).join(" "),
+                },
+              };
+        });
+
+        // Actualizar estado local inmediatamente para UI
+        setTareaLocal((prev) => ({
+          ...(prev || tarea),
+          [campo]: empleadosActualizados,
+        }));
+
         const tablaNombre =
           campo === "empleados_designados"
             ? "tareas_empleados_designados"
@@ -312,7 +405,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
         // Eliminar relaciones existentes
         await supabase.from(tablaNombre).delete().eq("tarea_id", tarea.id);
 
-        // Insertar nuevas relaciones
+        // Insertar nuevas relaciones solo si hay IDs válidos
         if (empleadosIds.length > 0) {
           const relaciones = empleadosIds.map((empId) => ({
             tarea_id: tarea.id,
@@ -324,9 +417,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
           if (error) throw error;
         }
 
-        // NO actualizar estado local - el panel se actualizará via onUpdate()
         toast.success("Actualizado correctamente");
-        onUpdate?.(); // Recargar para ver cambios
         return;
       }
 
@@ -373,15 +464,31 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 taskId: tarea.id,
-                title: `✅ [FINALIZADA] ${tarea.nombre}`,
+                title: `${tarea.nombre}`,
                 completed: true,
+                responsable:
+                  tarea.empleados_responsables
+                    ?.map((e) => {
+                      // Manejar ambos formatos: directo o anidado
+                      const emp = e.empleado || e;
+                      return emp.nombre || emp.nombre_completo || "";
+                    })
+                    .filter(Boolean)
+                    .join(", ") || "",
+                designado:
+                  tarea.empleados_designados
+                    ?.map((e) => {
+                      // Manejar ambos formatos: directo o anidado
+                      const emp = e.empleado || e;
+                      return emp.nombre || emp.nombre_completo || "";
+                    })
+                    .filter(Boolean)
+                    .join(", ") || "",
+                cliente: tarea.cliente?.nombre || "",
               }),
             });
 
             if (response.ok) {
-              console.log(
-                "✅ Evento marcado como finalizado en Google Calendar"
-              );
             }
           } catch (calError) {
             console.warn(
@@ -396,59 +503,187 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
         }
       }
 
+      // Si se actualizó la descripción o notas, actualizar en Google Calendar
+      if (
+        (campo === "descripcion" || campo === "notas") &&
+        debeSincronizarConCalendario(tarea.nombre)
+      ) {
+        const calendarioKey = `desc-${tarea.id}`;
+        if (!calendarioEnProgreso.current.has(calendarioKey)) {
+          calendarioEnProgreso.current.add(calendarioKey);
+
+          try {
+            // Obtener la tarea actualizada de la base de datos
+            const { data: tareaActualizada } = await supabase
+              .from("tareas")
+              .select(
+                `
+                *,
+                cliente:clientes(id, nombre),
+                empleados_designados:tareas_empleados_designados(empleado:empleados(id, nombre, apellido)),
+                empleados_responsables:tareas_empleados_responsables(empleado:empleados(id, nombre, apellido))
+              `
+              )
+              .eq("id", tarea.id)
+              .single();
+
+            if (!tareaActualizada) {
+              console.warn(
+                "⚠️ No se encontró la tarea para actualizar calendario"
+              );
+              return;
+            }
+
+            const response = await fetch("/api/calendar/events/update", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                taskId: tarea.id,
+                description: tareaActualizada.descripcion || "",
+                notes: tareaActualizada.notas || "",
+                responsable:
+                  tareaActualizada.empleados_responsables
+                    ?.map((e) => {
+                      const emp = e.empleado || e;
+                      return emp.nombre || emp.nombre_completo || "";
+                    })
+                    .filter(Boolean)
+                    .join(", ") || "",
+                designado:
+                  tareaActualizada.empleados_designados
+                    ?.map((e) => {
+                      const emp = e.empleado || e;
+                      return emp.nombre || emp.nombre_completo || "";
+                    })
+                    .filter(Boolean)
+                    .join(", ") || "",
+                cliente: tareaActualizada.cliente?.nombre || "",
+              }),
+            });
+
+            if (response.ok) {
+            }
+          } catch (calError) {
+            console.warn(
+              "⚠️ Error actualizando descripción en calendario:",
+              calError
+            );
+          } finally {
+            setTimeout(() => {
+              calendarioEnProgreso.current.delete(calendarioKey);
+            }, 1000);
+          }
+        }
+      }
+
       // Si se actualizó la fecha de vencimiento, actualizar evento en Google Calendar
       if (campo === "fecha_vencimiento" && valor) {
         // Solo sincronizar si la tarea empieza con palabras clave
         if (!debeSincronizarConCalendario(tarea.nombre)) {
-          console.log(
-            "⏭️ Tarea no requiere sincronización con calendario:",
-            tarea.nombre
-          );
+        
         } else {
           const calendarioKey = `fecha-${tarea.id}`;
           if (!calendarioEnProgreso.current.has(calendarioKey)) {
             calendarioEnProgreso.current.add(calendarioKey);
 
             try {
-              // Crear fecha en hora local sin conversión de timezone
+              // Crear fecha según el tipo de evento
               const [year, month, day] = valor.split("-");
-              const fechaVencimiento = new Date(
-                parseInt(year),
-                parseInt(month) - 1,
-                parseInt(day),
-                9,
-                0,
-                0
-              );
-              const fechaFin = new Date(fechaVencimiento);
-              fechaFin.setHours(10, 0, 0, 0);
+
+              let fechaVencimiento, fechaFin;
+
+              if (esTodoElDia) {
+                // Evento de todo el día: usar solo fecha (sin hora)
+                fechaVencimiento = `${valor}`;
+                fechaFin = `${valor}`;
+              } else {
+                // Evento con hora específica
+                const [horaIni, minIni] = horaInicio.split(":");
+                const [horaEnd, minEnd] = horaFin.split(":");
+
+                fechaVencimiento = new Date(
+                  parseInt(year),
+                  parseInt(month) - 1,
+                  parseInt(day),
+                  parseInt(horaIni),
+                  parseInt(minIni),
+                  0
+                );
+                fechaFin = new Date(
+                  parseInt(year),
+                  parseInt(month) - 1,
+                  parseInt(day),
+                  parseInt(horaEnd),
+                  parseInt(minEnd),
+                  0
+                );
+              }
 
               const response = await fetch("/api/calendar/events/update", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   taskId: tarea.id,
-                  title: `[TAREA] ${tarea.nombre}`,
+                  title: `${tarea.nombre}`,
                   description: tarea.descripcion || "Tarea pendiente",
-                  start: fechaVencimiento.toISOString(),
-                  end: fechaFin.toISOString(),
+                  start: esTodoElDia
+                    ? fechaVencimiento
+                    : fechaVencimiento.toISOString(),
+                  end: esTodoElDia ? fechaFin : fechaFin.toISOString(),
+                  allDay: esTodoElDia,
+                  responsable:
+                    tarea.empleados_responsables
+                      ?.map((e) => {
+                        const emp = e.empleado || e;
+                        return emp.nombre || emp.nombre_completo || "";
+                      })
+                      .filter(Boolean)
+                      .join(", ") || "",
+                  designado:
+                    tarea.empleados_designados
+                      ?.map((e) => {
+                        const emp = e.empleado || e;
+                        return emp.nombre || emp.nombre_completo || "";
+                      })
+                      .filter(Boolean)
+                      .join(", ") || "",
+                  cliente: tarea.cliente?.nombre || "",
                 }),
               });
 
               if (response.ok) {
-                console.log("✅ Evento actualizado en Google Calendar");
+              
               } else if (response.status === 404) {
-                // Si no existe evento, crear uno nuevo
-                console.log("📅 Evento no existe, creando nuevo...");
+               
                 await fetch("/api/calendar/events/create", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
-                    title: `[TAREA] ${tarea.nombre}`,
+                    title: `${tarea.nombre}`,
                     description: tarea.descripcion || "Tarea pendiente",
-                    start: fechaVencimiento.toISOString(),
-                    end: fechaFin.toISOString(),
+                    start: esTodoElDia
+                      ? fechaVencimiento
+                      : fechaVencimiento.toISOString(),
+                    end: esTodoElDia ? fechaFin : fechaFin.toISOString(),
                     taskId: tarea.id,
+                    allDay: esTodoElDia,
+                    responsable:
+                      tarea.empleados_responsables
+                        ?.map((e) => {
+                          const emp = e.empleado || e;
+                          return emp.nombre || emp.nombre_completo || "";
+                        })
+                        .filter(Boolean)
+                        .join(", ") || "",
+                    designado:
+                      tarea.empleados_designados
+                        ?.map((e) => {
+                          const emp = e.empleado || e;
+                          return emp.nombre || emp.nombre_completo || "";
+                        })
+                        .filter(Boolean)
+                        .join(", ") || "",
+                    cliente: tarea.cliente?.nombre || "",
                   }),
                 });
               } else {
@@ -483,7 +718,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
   const guardarNuevaTarea = async () => {
     // Prevenir doble guardado
     if (loading) {
-      console.log("⏸️ Guardado ya en progreso, ignorando...");
+    
       return;
     }
 
@@ -511,6 +746,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
         empleadoCreadorId = empleado?.id || null;
       }
 
+      // Objeto para insertar en la base de datos (sin arrays de empleados)
       const nuevaTarea = {
         nombre: tituloLocal || nuevaTareaTemp.nombre,
         descripcion: nuevaTareaTemp.descripcion || "",
@@ -524,6 +760,12 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
         fecha_vencimiento: nuevaTareaTemp.fecha_vencimiento || null,
       };
 
+      // ✅ Guardar arrays de empleados para usar con Google Calendar (no van a la BD)
+      const empleadosParaCalendar = {
+        empleados_responsables: nuevaTareaTemp.empleados_responsables || [],
+        empleados_designados: nuevaTareaTemp.empleados_designados || [],
+      };
+
       const { data, error } = await supabase
         .from("tareas")
         .insert([nuevaTarea])
@@ -534,17 +776,24 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
 
       // Insertar empleados designados
       if (nuevaTareaTemp.empleados_designados?.length > 0) {
-        const designados = nuevaTareaTemp.empleados_designados.map((emp) => ({
-          tarea_id: data.id,
-          empleado_id: emp.id,
-        }));
+        // Filtrar empleados con IDs válidos
+        const designadosValidos = nuevaTareaTemp.empleados_designados.filter(
+          (emp) => emp.id && emp.id !== null
+        );
 
-        const { error: errorDesignados } = await supabase
-          .from("tareas_empleados_designados")
-          .insert(designados);
+        if (designadosValidos.length > 0) {
+          const designados = designadosValidos.map((emp) => ({
+            tarea_id: data.id,
+            empleado_id: emp.id,
+          }));
 
-        if (errorDesignados) {
-          console.warn("Error insertando designados:", errorDesignados);
+          const { error: errorDesignados } = await supabase
+            .from("tareas_empleados_designados")
+            .insert(designados);
+
+          if (errorDesignados) {
+            console.warn("Error insertando designados:", errorDesignados);
+          }
         }
       }
 
@@ -561,9 +810,11 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
           responsablesExistentes?.map((r) => r.empleado_id) || []
         );
 
-        // Solo insertar los que no existen
+        // Solo insertar los que no existen y tienen ID válido
         const responsablesNuevos = nuevaTareaTemp.empleados_responsables
-          .filter((emp) => !idsExistentes.has(emp.id))
+          .filter(
+            (emp) => emp.id && emp.id !== null && !idsExistentes.has(emp.id)
+          )
           .map((emp) => ({
             tarea_id: data.id,
             empleado_id: emp.id,
@@ -584,35 +835,79 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
       if (data && nuevaTarea.fecha_vencimiento) {
         // Solo sincronizar si la tarea empieza con palabras clave
         if (!debeSincronizarConCalendario(nuevaTarea.nombre)) {
-          console.log(
-            "⏭️ Tarea nueva no requiere sincronización con calendario:",
-            nuevaTarea.nombre
-          );
+        
           toast.success("Tarea creada exitosamente");
         } else {
           try {
-            // Crear fecha en hora local sin conversión de timezone
+            // Crear fecha según el tipo de evento
             const [year, month, day] = nuevaTarea.fecha_vencimiento.split("-");
-            const fechaVencimiento = new Date(
-              parseInt(year),
-              parseInt(month) - 1,
-              parseInt(day),
-              9,
-              0,
-              0
-            );
-            const fechaFin = new Date(fechaVencimiento);
-            fechaFin.setHours(10, 0, 0, 0);
+
+            let fechaVencimiento, fechaFin;
+
+            if (esTodoElDia) {
+              // Evento de todo el día
+              fechaVencimiento = nuevaTarea.fecha_vencimiento;
+              fechaFin = nuevaTarea.fecha_vencimiento;
+            } else {
+              // Evento con hora específica
+              const [horaIni, minIni] = horaInicio.split(":");
+              const [horaEnd, minEnd] = horaFin.split(":");
+
+              fechaVencimiento = new Date(
+                parseInt(year),
+                parseInt(month) - 1,
+                parseInt(day),
+                parseInt(horaIni),
+                parseInt(minIni),
+                0
+              );
+              fechaFin = new Date(
+                parseInt(year),
+                parseInt(month) - 1,
+                parseInt(day),
+                parseInt(horaEnd),
+                parseInt(minEnd),
+                0
+              );
+            }
+            // Preparar datos para Google Calendar
+         
+
+            const responsableStr =
+              empleadosParaCalendar.empleados_responsables
+                ?.map((e) => {
+                
+                  return e.nombre || e.apellido || e.nombre_completo || "";
+                })
+                .filter(Boolean)
+                .join(", ") || "";
+            const designadoStr =
+              empleadosParaCalendar.empleados_designados
+                ?.map((e) => {
+                 
+                  return e.nombre || e.apellido || e.nombre_completo || "";
+                })
+                .filter(Boolean)
+                .join(", ") || "";
+            const clienteStr =
+              clientes.find((c) => c.id === nuevaTarea.cliente_id)?.nombre ||
+              "";
 
             const response = await fetch("/api/calendar/events/create", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                title: `[TAREA] ${nuevaTarea.nombre}`,
+                title: `${nuevaTarea.nombre}`,
                 description: nuevaTarea.descripcion || "Tarea pendiente",
-                start: fechaVencimiento.toISOString(),
-                end: fechaFin.toISOString(),
+                start: esTodoElDia
+                  ? fechaVencimiento
+                  : fechaVencimiento.toISOString(),
+                end: esTodoElDia ? fechaFin : fechaFin.toISOString(),
                 taskId: data.id,
+                allDay: esTodoElDia,
+                responsable: responsableStr,
+                designado: designadoStr,
+                cliente: clienteStr,
               }),
             });
 
@@ -628,7 +923,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                 }`
               );
             } else {
-              console.log("✅ Evento creado en Google Calendar");
+            
               toast.success("Tarea y evento creados exitosamente");
             }
           } catch (calError) {
@@ -641,7 +936,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
       } else {
         toast.success("Tarea creada exitosamente");
       }
-      onUpdate?.();
+      // NO llamar onUpdate() - la suscripción en tiempo real actualizará la tabla
       onClose();
     } catch (error) {
       console.error("Error creando tarea:", error);
@@ -666,8 +961,8 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
     });
   };
 
-  // Determinar qué datos mostrar: tarea existente o nueva tarea temporal
-  const datosActuales = tarea?.id ? tarea : nuevaTareaTemp;
+  // Determinar qué datos mostrar: tarea local (actualizada optimísticamente) o nueva tarea temporal
+  const datosActuales = tarea?.id ? tareaLocal || tarea : nuevaTareaTemp;
 
   // Verificar si la tarea está finalizada
   const tareaFinalizada =
@@ -935,28 +1230,42 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                 icon={<User className="w-3.5 h-3.5" />}
                 label="Designados"
               >
-                <EmpleadosBadgeSelector
-                  value={datosActuales?.empleados_designados || []}
-                  options={empleados}
-                  onUpdate={(selected) =>
-                    actualizarCampo("empleados_designados", selected)
-                  }
-                  placeholder="Seleccionar designados..."
-                />
+                {initialLoading ? (
+                  <div className="flex gap-1">
+                    <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse"></div>
+                    <div className="h-6 w-20 bg-gray-200 rounded-full animate-pulse"></div>
+                  </div>
+                ) : (
+                  <EmpleadosBadgeSelector
+                    value={datosActuales?.empleados_designados || []}
+                    options={empleados}
+                    onUpdate={(selected) =>
+                      actualizarCampo("empleados_designados", selected)
+                    }
+                    placeholder="Seleccionar designados..."
+                  />
+                )}
               </PropertyRow>
 
               <PropertyRow
                 icon={<User className="w-3.5 h-3.5" />}
                 label="Responsables"
               >
-                <EmpleadosBadgeSelector
-                  value={datosActuales?.empleados_responsables || []}
-                  options={empleados}
-                  onUpdate={(selected) =>
-                    actualizarCampo("empleados_responsables", selected)
-                  }
-                  placeholder="Seleccionar responsables..."
-                />
+                {initialLoading ? (
+                  <div className="flex gap-1">
+                    <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse"></div>
+                    <div className="h-6 w-20 bg-gray-200 rounded-full animate-pulse"></div>
+                  </div>
+                ) : (
+                  <EmpleadosBadgeSelector
+                    value={datosActuales?.empleados_responsables || []}
+                    options={empleados}
+                    onUpdate={(selected) =>
+                      actualizarCampo("empleados_responsables", selected)
+                    }
+                    placeholder="Seleccionar responsables..."
+                  />
+                )}
               </PropertyRow>
 
               <PropertyRow
@@ -1003,11 +1312,87 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                 icon={<Calendar className="w-3.5 h-3.5" />}
                 label="Vencimiento"
               >
-                <EditableDate
-                  value={datosActuales?.fecha_vencimiento || ""}
-                  onUpdate={(val) => actualizarCampo("fecha_vencimiento", val)}
-                  compact
-                />
+                <div className="flex-1 space-y-2">
+                  <EditableDate
+                    value={datosActuales?.fecha_vencimiento || ""}
+                    onUpdate={(val) =>
+                      actualizarCampo("fecha_vencimiento", val)
+                    }
+                    compact
+                  />
+
+                  {/* Selector de tipo de evento - SIEMPRE mostrar si hay fecha Y si sincroniza */}
+                  {datosActuales?.fecha_vencimiento && (
+                    <div className="space-y-2">
+                      {debeSincronizarConCalendario(datosActuales?.nombre) ? (
+                        <div className="flex flex-col gap-2 p-2 bg-blue-50 rounded-lg border border-blue-200">
+                          <div className="flex items-center justify-between">
+                            <button
+                              onClick={() => setEsTodoElDia(!esTodoElDia)}
+                              className="flex items-center gap-2 text-xs text-gray-700 hover:text-primary-600 transition-colors"
+                            >
+                              <div
+                                className={clsx(
+                                  "w-4 h-4 rounded border-2 flex items-center justify-center transition-colors",
+                                  esTodoElDia
+                                    ? "bg-primary-600 border-primary-600"
+                                    : "border-gray-300"
+                                )}
+                              >
+                                {esTodoElDia && (
+                                  <svg
+                                    className="w-3 h-3 text-white"
+                                    fill="currentColor"
+                                    viewBox="0 0 20 20"
+                                  >
+                                    <path
+                                      fillRule="evenodd"
+                                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                      clipRule="evenodd"
+                                    />
+                                  </svg>
+                                )}
+                              </div>
+                              <span className="font-semibold">Todo el día</span>
+                            </button>
+                            <span className="text-[10px] text-blue-600 font-medium">
+                              📅 Se sincronizará con Google Calendar
+                            </span>
+                          </div>
+
+                          {!esTodoElDia && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-600 font-medium">
+                                Horario:
+                              </span>
+                              <input
+                                type="time"
+                                value={horaInicio}
+                                onChange={(e) => setHoraInicio(e.target.value)}
+                                className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none"
+                              />
+                              <span className="text-xs text-gray-500 font-medium">
+                                a
+                              </span>
+                              <input
+                                type="time"
+                                value={horaFin}
+                                onChange={(e) => setHoraFin(e.target.value)}
+                                className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-gray-500 italic">
+                          💡 Para sincronizar con Google Calendar, el nombre
+                          debe empezar con: VENCIMIENTO, AUDIENCIA, REUNIÓN o
+                          SEGUIMIENTO
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </PropertyRow>
 
               {datosActuales?.fecha_completada && (
@@ -1117,9 +1502,10 @@ function EstadoSelectGrouped({ value, estados, onUpdate }) {
     <div ref={containerRef} className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-colors text-xs w-full text-left justify-start"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-colors text-xs font-medium"
         style={{
           backgroundColor: estadoActual ? `${estadoActual.color}20` : "#f3f4f6",
+          color: estadoActual ? estadoActual.color : "#6B7280",
         }}
       >
         {estadoActual ? (
@@ -1128,15 +1514,12 @@ function EstadoSelectGrouped({ value, estados, onUpdate }) {
               className="w-2 h-2 rounded-full shrink-0"
               style={{ backgroundColor: estadoActual.color }}
             />
-            <span
-              className="font-medium capitalize"
-              style={{ color: estadoActual.color }}
-            >
+            <span className="capitalize">
               {estadoActual.nombre.replace(/_/g, " ")}
             </span>
           </>
         ) : (
-          <span className="text-gray-400">Seleccionar estado</span>
+          <span>Seleccionar</span>
         )}
       </button>
 
@@ -1146,7 +1529,7 @@ function EstadoSelectGrouped({ value, estados, onUpdate }) {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute left-0 top-full mt-1 bg-white border rounded-xl shadow-xl z-[11001] min-w-[250px] max-h-[400px] overflow-y-auto"
+            className="absolute left-0 top-full mt-1 bg-white border rounded-lg shadow-xl z-[11001] w-[140px] max-h-[400px] overflow-y-auto"
           >
             {categorias.map((categoria) => {
               const estadosCategoria = estadosAgrupados[categoria.key];
@@ -1163,25 +1546,28 @@ function EstadoSelectGrouped({ value, estados, onUpdate }) {
                       key={estado.id}
                       onClick={() => handleSelect(estado.id)}
                       className={clsx(
-                        "w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors",
+                        "w-full px-2 py-1.5 text-left hover:bg-gray-50 transition-colors",
                         value === estado.id && "bg-blue-50"
                       )}
                     >
                       <span
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+                        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
                         style={{
                           backgroundColor: `${estado.color}20`,
                           color: estado.color,
                         }}
                       >
                         <span
-                          className="w-2 h-2 rounded-full shrink-0"
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
                           style={{ backgroundColor: estado.color }}
                         />
-                        <span className="capitalize">
+                        <span className="capitalize text-[11px]">
                           {estado.nombre.replace(/_/g, " ")}
                         </span>
                       </span>
+                      {value === estado.id && (
+                        <span className="ml-1 text-blue-600 text-xs">✓</span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -1249,30 +1635,33 @@ function BadgeSelector({ value, options, onUpdate }) {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute left-0 top-full mt-1 bg-white border rounded-xl shadow-xl z-[11001] min-w-[180px] py-1"
+            className="absolute left-0 top-full mt-1 bg-white border rounded-lg shadow-xl z-[11001] w-[130px] py-1"
           >
             {options.map((option) => (
               <button
                 key={option.id}
                 onClick={() => handleSelect(option.id)}
                 className={clsx(
-                  "w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors",
+                  "w-full px-2 py-1.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-2",
                   value === option.id && "bg-blue-50"
                 )}
               >
                 <span
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
                   style={{
                     backgroundColor: `${option.color}20`,
                     color: option.color,
                   }}
                 >
                   <span
-                    className="w-2 h-2 rounded-full shrink-0"
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
                     style={{ backgroundColor: option.color }}
                   />
                   <span className="capitalize">{option.nombre}</span>
                 </span>
+                {value === option.id && (
+                  <span className="ml-auto text-blue-600 text-sm">✓</span>
+                )}
               </button>
             ))}
           </motion.div>
@@ -1490,7 +1879,7 @@ function EditableSelect({
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-[11001] bg-white border-2 border-primary-400 shadow-xl rounded-lg py-1 min-w-[200px] max-h-[300px] overflow-auto"
+            className="z-[11001] bg-white border-2 border-primary-400 shadow-xl rounded-lg py-1 min-w-[160px] max-h-[300px] overflow-auto"
           >
             {options.map((option) => (
               <button
@@ -1578,7 +1967,7 @@ function EditableDate({ value, onUpdate, compact = false }) {
             }
           }}
           autoFocus
-          className="w-full px-2 py-1 text-sm border-2 border-primary-400 rounded bg-primary-50 outline-none"
+          className="w-40 px-2 py-1 text-sm border-2 border-primary-400 rounded bg-primary-50 outline-none"
         />
       ) : (
         <div
@@ -1643,7 +2032,7 @@ function EditableDateWithTime({ value, onUpdate, compact = false }) {
             value={currentDate}
             onChange={(e) => setCurrentDate(e.target.value)}
             onBlur={handleSave}
-            className="flex-1 px-2 py-1 text-sm border-2 border-primary-400 rounded bg-primary-50 outline-none"
+            className="w-40 px-2 py-1 text-sm border-2 border-primary-400 rounded bg-primary-50 outline-none"
           />
           <input
             type="time"
@@ -1671,22 +2060,37 @@ function EditableDateWithTime({ value, onUpdate, compact = false }) {
 function EmpleadosBadgeSelector({ value, options, onUpdate, placeholder }) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
+  const updateInProgress = useRef(false);
 
-  // Función para generar un color consistente basado en el ID del empleado
-  const getEmpleadoColor = (empleadoId) => {
+  // Función para generar un color único basado en el ID del empleado
+  const getEmpleadoColor = (empleadoId, nombreEmpleado = "") => {
     const colores = [
-      "#EF4444",
-      "#F59E0B",
-      "#10B981",
-      "#3B82F6",
-      "#8B5CF6",
-      "#EC4899",
-      "#14B8A6",
-      "#F97316",
-      "#06B6D4",
-      "#84CC16",
+      { bg: "#DBEAFE", text: "#2563EB" }, // Azul
+      { bg: "#D1FAE5", text: "#059669" }, // Verde
+      { bg: "#FEF3C7", text: "#D97706" }, // Naranja
+      { bg: "#EDE9FE", text: "#7C3AED" }, // Púrpura
+      { bg: "#FCE7F3", text: "#DB2777" }, // Rosa
+      { bg: "#BAE6FD", text: "#0284C7" }, // Azul claro
+      { bg: "#FED7AA", text: "#EA580C" }, // Naranja claro
+      { bg: "#A7F3D0", text: "#047857" }, // Verde claro
+      { bg: "#FEE2E2", text: "#DC2626" }, // Rojo
+      { bg: "#C7D2FE", text: "#4338CA" }, // Índigo
     ];
-    const index = empleadoId % colores.length;
+
+    // Convertir UUID a número para el hash
+    let hash = 0;
+    const idStr = String(empleadoId || nombreEmpleado || "default");
+
+    for (let i = 0; i < idStr.length; i++) {
+      const char = idStr.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash; // Convertir a 32bit integer
+    }
+
+    // Usar multiplicación dorada para mejor distribución
+    hash = Math.abs(hash);
+    const index = (hash * 2654435761) % colores.length;
+
     return colores[index];
   };
 
@@ -1704,22 +2108,86 @@ function EmpleadosBadgeSelector({ value, options, onUpdate, placeholder }) {
   }, [isOpen]);
 
   const handleToggleEmpleado = (empleado) => {
-    const isSelected = value?.some((e) => e.id === empleado.id);
+    // Prevenir múltiples llamadas simultáneas
+    if (updateInProgress.current) {
+     
+      return;
+    }
+
+    // Validar que el empleado tenga un ID válido
+    if (!empleado.id) {
+      console.error("❌ Empleado sin ID válido:", empleado);
+      return;
+    }
+
+    updateInProgress.current = true;
+
+    const isSelected = value?.some((e) => {
+      const empId = e.empleado?.id || e.id;
+      return empId === empleado.id;
+    });
+
     let newValue;
 
     if (isSelected) {
       // Remover empleado
-      newValue = value.filter((e) => e.id !== empleado.id);
+      newValue = value.filter((e) => {
+        const empId = e.empleado?.id || e.id;
+        return empId !== empleado.id;
+      });
     } else {
-      // Agregar empleado
-      newValue = [...(value || []), empleado];
+      // Agregar empleado - mantener estructura original
+      newValue = [...(value || []), { empleado: empleado }];
     }
 
     // Convertir a formato que espera el actualizarCampo
-    const formatted = newValue.map((emp) => ({
-      value: emp.id,
-      label: `${emp.nombre} ${emp.apellido}`,
-    }));
+    const formatted = newValue
+      .map((emp) => {
+        const empData = emp.empleado || emp;
+        const empId = empData.id;
+        const empNombre = empData.nombre;
+
+        // Solo incluir si tiene ID válido
+        if (!empId) {
+          console.warn("⚠️ Empleado sin ID, omitiendo:", empData);
+          return null;
+        }
+
+        return {
+          value: empId,
+          label: empNombre || "Empleado",
+        };
+      })
+      .filter(Boolean); // Eliminar nulls
+
+    // Llamar a onUpdate - NO usar await para que sea inmediato
+    onUpdate(formatted);
+
+    // Liberar el lock después de un pequeño delay
+    setTimeout(() => {
+      updateInProgress.current = false;
+    }, 300);
+  };
+  const handleRemoveEmpleado = (empleadoId, e) => {
+    e.stopPropagation();
+    const newValue = value.filter((emp) => {
+      const empId = emp.empleado?.id || emp.id;
+      return empId !== empleadoId;
+    });
+    const formatted = newValue
+      .map((emp) => {
+        const empData = emp.empleado || emp;
+        const empId = empData.id;
+        const empNombre = empData.nombre;
+
+        if (!empId) return null;
+
+        return {
+          value: empId,
+          label: empNombre || "Empleado",
+        };
+      })
+      .filter(Boolean);
 
     onUpdate(formatted);
   };
@@ -1731,22 +2199,35 @@ function EmpleadosBadgeSelector({ value, options, onUpdate, placeholder }) {
         className="flex flex-wrap gap-1.5 px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors min-h-[32px]"
       >
         {value && value.length > 0 ? (
-          value.map((emp) => {
-            const color = getEmpleadoColor(emp.id);
+          value.map((emp, index) => {
+            // Asegurar que tenemos el objeto empleado correcto
+            const empleadoData = emp.empleado || emp;
+            const empleadoId = empleadoData.id;
+            const empleadoNombre =
+              empleadoData.nombre || emp.nombre || "Sin nombre";
+
+            const colorObj = getEmpleadoColor(empleadoId, empleadoNombre);
+            const uniqueKey = empleadoId || `emp-${index}-${empleadoNombre}`;
+            const primerNombre = empleadoNombre.split(" ")[0];
+
+
             return (
               <span
-                key={emp.id}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                key={uniqueKey}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium group"
                 style={{
-                  backgroundColor: `${color}20`,
-                  color: color,
+                  backgroundColor: colorObj.bg,
+                  color: colorObj.text,
                 }}
               >
-                <span
-                  className="w-1.5 h-1.5 rounded-full"
-                  style={{ backgroundColor: color }}
-                />
-                {emp.nombre} {emp.apellido}
+                <span>{primerNombre}</span>
+                <button
+                  onClick={(e) => handleRemoveEmpleado(empleadoId, e)}
+                  className="ml-1 hover:bg-black hover:bg-opacity-20 rounded-full w-4 h-4 flex items-center justify-center transition-colors"
+                  title="Eliminar"
+                >
+                  ×
+                </button>
               </span>
             );
           })
@@ -1761,40 +2242,39 @@ function EmpleadosBadgeSelector({ value, options, onUpdate, placeholder }) {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute left-0 top-full mt-1 bg-white border rounded-xl shadow-xl z-[11001] min-w-[200px] max-h-[300px] overflow-y-auto py-1"
+            className="absolute left-0 top-full mt-1 bg-white border rounded-xl shadow-xl z-[11001] min-w-[160px] max-h-[300px] overflow-y-auto py-1"
           >
-            {options.map((empleado) => {
-              const isSelected = value?.some((e) => e.id === empleado.id);
-              const color = getEmpleadoColor(empleado.id);
+            {options.map((empleado, index) => {
+              const isSelected = value?.some((e) => {
+                const empId = e.empleado?.id || e.id;
+                return empId === empleado.id;
+              });
+              const colorObj = getEmpleadoColor(empleado.id, empleado.nombre);
+              const uniqueKey =
+                empleado.id || `option-${index}-${empleado.nombre}`;
 
               return (
                 <button
-                  key={empleado.id}
+                  key={uniqueKey}
                   onClick={() => handleToggleEmpleado(empleado)}
                   className={clsx(
-                    "w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-2",
+                    "w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-3",
                     isSelected && "bg-blue-50"
                   )}
                 >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => {}}
-                    className="rounded border-gray-300"
-                  />
-                  <span
-                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
+                  <div
+                    className="w-3 h-3 rounded-full shrink-0"
                     style={{
-                      backgroundColor: `${color}20`,
-                      color: color,
+                      backgroundColor: colorObj.bg,
+                      border: `2px solid ${colorObj.text}`,
                     }}
-                  >
-                    <span
-                      className="w-1.5 h-1.5 rounded-full"
-                      style={{ backgroundColor: color }}
-                    />
-                    {empleado.nombre} {empleado.apellido}
+                  />
+                  <span className="flex-1">
+                    {empleado.nombre || "Empleado"}
                   </span>
+                  {isSelected && (
+                    <span className="text-blue-600 text-sm">✓</span>
+                  )}
                 </button>
               );
             })}

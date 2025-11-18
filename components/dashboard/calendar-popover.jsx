@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import Link from "next/link";
@@ -10,42 +10,63 @@ export function CalendarPopover({ isOpen, onClose }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState("month");
   const [hoveredDay, setHoveredDay] = useState(null);
+  const [events, setEvents] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchEvents();
+    }
+  }, [isOpen, currentDate]);
+
+  const fetchEvents = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/calendar/events");
+      const data = await response.json();
+
+      if (response.ok) {
+        // Agrupar eventos por día del mes
+        const eventsByDay = {};
+        (data.events || []).forEach((event) => {
+          const startDate = new Date(event.start);
+          const day = startDate.getDate();
+          const month = startDate.getMonth();
+          const year = startDate.getFullYear();
+
+          // Solo incluir eventos del mes actual mostrado
+          if (
+            month === currentDate.getMonth() &&
+            year === currentDate.getFullYear()
+          ) {
+            if (!eventsByDay[day]) {
+              eventsByDay[day] = [];
+            }
+
+            const time = startDate.toLocaleTimeString("es-ES", {
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+
+            eventsByDay[day].push({
+              id: event.id,
+              title: event.title,
+              time: time,
+              color: "bg-blue-100 text-blue-700",
+              description: event.description,
+            });
+          }
+        });
+        setEvents(eventsByDay);
+      }
+    } catch (error) {
+      console.error("Error cargando eventos:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (!isOpen) return null;
-
-  // Eventos de ejemplo (más adelante se cargarán desde la base de datos)
-  const events = {
-    17: [
-      {
-        id: 1,
-        title: "Reunión con Cliente",
-        time: "10:00 - 11:30",
-        color: "bg-blue-100 text-blue-700",
-      },
-      {
-        id: 2,
-        title: "Audiencia Legal",
-        time: "14:00 - 16:00",
-        color: "bg-purple-100 text-purple-700",
-      },
-    ],
-    22: [
-      {
-        id: 3,
-        title: "Revisión de Caso",
-        time: "09:00 - 10:00",
-        color: "bg-orange-100 text-orange-700",
-      },
-    ],
-    25: [
-      {
-        id: 4,
-        title: "Entrega de Documentos",
-        time: "11:00",
-        color: "bg-green-100 text-green-700",
-      },
-    ],
-  };
 
   const hasEvents = (day) => {
     return events[day] && events[day].length > 0;

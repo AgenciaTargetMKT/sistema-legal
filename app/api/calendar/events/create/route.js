@@ -4,10 +4,20 @@ import { NextResponse } from "next/server";
 export async function POST(request) {
   try {
     const body = await request.json();
-    console.log("📅 Recibiendo petición para crear evento:", body);
 
-    const { title, description, start, end, location, attendees, taskId } =
-      body;
+    const {
+      title,
+      description,
+      start,
+      end,
+      location,
+      attendees,
+      taskId,
+      allDay,
+      responsable,
+      designado,
+      cliente,
+    } = body;
 
     // Validar campos requeridos
     if (!title || !start || !end) {
@@ -22,7 +32,6 @@ export async function POST(request) {
       );
     }
 
-    console.log("✅ Campos requeridos presentes");
 
     // Verificar variables de entorno
     if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) {
@@ -58,10 +67,6 @@ export async function POST(request) {
       );
     }
 
-    console.log("✅ Variables de entorno configuradas correctamente");
-    console.log("📧 Email:", process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL);
-    console.log("📅 Calendar ID:", process.env.GOOGLE_CALENDAR_ID);
-
     // Configurar autenticación
     const auth = new google.auth.GoogleAuth({
       credentials: {
@@ -79,7 +84,7 @@ export async function POST(request) {
     // ANTES de crear, verificar si ya existe un evento para este taskId
     if (taskId) {
       try {
-        console.log("🔍 Verificando si ya existe evento para taskId:", taskId);
+     
 
         const existingEvents = await calendar.events.list({
           calendarId: process.env.GOOGLE_CALENDAR_ID,
@@ -94,9 +99,7 @@ export async function POST(request) {
         );
 
         if (alreadyExists) {
-          console.log(
-            "⚠️ Ya existe un evento para esta tarea, actualizando en lugar de crear..."
-          );
+         
 
           // Actualizar el evento existente en lugar de crear uno nuevo
           const updatedEvent = await calendar.events.update({
@@ -133,26 +136,96 @@ export async function POST(request) {
       }
     }
 
+    // Función para determinar el color del evento según el tipo de tarea
+    // Colores mapeados a los más cercanos disponibles en Google Calendar:
+    // Rojo vino (#C0392B) → 11 (Tomate/Rojo)
+    // Azul profundo (#1F618D) → 9 (Arándano/Azul oscuro)
+    // Verde azulado (#1ABC9C) → 7 (Pavo real/Turquesa)
+    // Ambar moderno (#F1C40F) → 5 (Banana/Amarillo)
+    // Gris azulado (#5D6D7E) → 8 (Grafito/Gris)
+    const getEventColor = (title) => {
+      const upperTitle = title.toUpperCase();
+      if (upperTitle.includes("VENCIMIENTO")) return "11"; // Rojo vino
+      if (upperTitle.includes("AUDIENCIA")) return "9"; // Azul profundo
+      if (upperTitle.includes("REUNION") || upperTitle.includes("REUNIÓN"))
+        return "7"; // Verde azulado
+      if (upperTitle.includes("SEGUIMIENTO")) return "5"; // Ambar moderno
+      return "8"; // Gris azulado - predeterminado
+    };
+
+    // Función para agregar emoji de estado al título
+    const addStatusEmojiToTitle = (title, completed = false) => {
+      // Emoji de estado: 🟢 completado, 🟠 pendiente
+      const statusEmoji = completed ? "🟢" : "🟠";
+      return `${statusEmoji} ${title}`;
+    };
+
+    // Función para crear descripción enriquecida
+    const createRichDescription = (
+      description,
+      taskId,
+      title,
+      responsable,
+      designado,
+      cliente
+    ) => {
+      // Inicializar descripción vacía
+      let richDesc = "";
+
+      // Guardar TODA la descripción proporcionada
+      if (description) {
+        richDesc += `${description}\n\n`;
+      }
+
+      // Agregar información de responsables, designado y cliente
+      if (responsable || designado || cliente) {
+        richDesc += `━━━━━━━━━━━━━━━━━━━━━\n`;
+        if (responsable) {
+          richDesc += `👤 Responsable(s): ${responsable}\n`;
+        }
+        if (designado) {
+          richDesc += `👨‍💼 Designado: ${designado}\n`;
+        }
+        if (cliente) {
+          richDesc += `🏢 Cliente: ${cliente}\n`;
+        }
+        richDesc += `━━━━━━━━━━━━━━━━━━━━━\n`;
+      }
+
+      if (taskId) {
+        richDesc += `🔗 ID: ${taskId}`;
+      }
+      return richDesc;
+    };
+
     // Crear evento
+    const colorId = getEventColor(title);
+    const titleWithEmoji = addStatusEmojiToTitle(title, false); // Nuevas tareas siempre pendientes
     const event = {
-      summary: title,
-      description: taskId
-        ? `${description || ""}\n\n[Task ID: ${taskId}]`
-        : description || "",
+      summary: titleWithEmoji,
+      description: createRichDescription(
+        description,
+        taskId,
+        title,
+        responsable,
+        designado,
+        cliente
+      ),
       location: location || "",
-      start: {
-        dateTime: start,
-        timeZone: "America/Lima",
-      },
-      end: {
-        dateTime: end,
-        timeZone: "America/Lima",
-      },
+      colorId: colorId,
+      start: allDay
+        ? { date: start } // Para evento de todo el día
+        : { dateTime: start, timeZone: "America/Lima" }, // Para evento con hora
+      end: allDay
+        ? { date: end } // Para evento de todo el día
+        : { dateTime: end, timeZone: "America/Lima" }, // Para evento con hora
       // Guardar taskId en extended properties para búsqueda futura
       extendedProperties: taskId
         ? {
             private: {
               taskId: taskId,
+              createdBy: "sistema-legal",
+              createdAt: new Date().toISOString(),
             },
           }
         : undefined,
@@ -167,16 +240,12 @@ export async function POST(request) {
       },
     };
 
-    console.log("🔄 Intentando crear evento en Google Calendar...");
-    console.log("Evento:", JSON.stringify(event, null, 2));
-
     const response = await calendar.events.insert({
       calendarId: process.env.GOOGLE_CALENDAR_ID,
       resource: event,
       // Cambiar a "none" para no enviar notificaciones
       sendUpdates: "none",
     });
-    console.log("✅ Evento creado exitosamente:", response.data.id);
 
     return NextResponse.json({
       success: true,
@@ -190,9 +259,6 @@ export async function POST(request) {
       message: "Evento creado exitosamente",
     });
   } catch (error) {
-    console.error("Error completo al crear evento:", error);
-    console.error("Error stack:", error.stack);
-    console.error("Error details:", JSON.stringify(error, null, 2));
 
     return NextResponse.json(
       {

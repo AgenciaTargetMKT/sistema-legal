@@ -41,20 +41,17 @@ export default function LoginPage() {
       }
 
       if (data?.session) {
-        console.log("✅ Login exitoso!");
-        console.log("Session:", data.session);
+      
 
         // Esperar un momento para que las cookies se sincronicen
         await new Promise((resolve) => setTimeout(resolve, 500));
 
-        console.log("🔄 Redirigiendo al dashboard...");
-        // Usar router.push en lugar de window.location
         router.push("/dashboard");
 
         // Backup: si no redirige en 2 segundos, forzar con window.location
         setTimeout(() => {
           if (window.location.pathname === "/login") {
-            console.log("⚠️ Forzando redirección...");
+        
             window.location.href = "/dashboard";
           }
         }, 2000);

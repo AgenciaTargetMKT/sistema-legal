@@ -50,11 +50,6 @@ export default function TareasTable({
   );
 
   useEffect(() => {
-    console.log(
-      "📋 TareasTable recibió tareas:",
-      initialTareas?.length,
-      initialTareas
-    );
     setTareas(initialTareas || []);
   }, [initialTareas]);
 
@@ -74,10 +69,34 @@ export default function TareasTable({
           table: "tareas",
         },
         async (payload) => {
-          console.log("Cambio en tareas:", payload);
-
           if (payload.eventType === "INSERT") {
-            onUpdate?.();
+            // Cuando se inserta una nueva tarea, obtener sus datos completos
+            const { data: nuevaTarea } = await supabase
+              .from("tareas")
+              .select(
+                `
+                *,
+                proceso:procesos(id, nombre),
+                estado:estados_tarea(id, nombre, color, categoria),
+                cliente:clientes(id, nombre),
+                empleados_designados:tareas_empleados_designados(empleado:empleados(id, nombre, apellido)),
+                empleados_responsables:tareas_empleados_responsables(empleado:empleados(id, nombre, apellido))
+              `
+              )
+              .eq("id", payload.new.id)
+              .single();
+
+            if (nuevaTarea) {
+      
+              setTareas((prev) => {
+                const newTareas = [...prev, nuevaTarea];
+                // Notificar al padre después del render
+                setTimeout(() => {
+                  onTareasChange?.(newTareas);
+                }, 0);
+                return newTareas;
+              });
+            }
           } else if (payload.eventType === "UPDATE") {
             // Fetch completo de la tarea con sus relaciones
             const { data: tareaActualizada } = await supabase
@@ -96,13 +115,6 @@ export default function TareasTable({
               .single();
 
             if (tareaActualizada) {
-              console.log("✅ Tarea actualizada desde DB:", {
-                id: tareaActualizada.id,
-                fecha_vencimiento: tareaActualizada.fecha_vencimiento,
-                estado: tareaActualizada.estado?.nombre,
-                responsables: tareaActualizada.empleados_responsables?.length,
-              });
-
               setTareas((prev) => {
                 const index = prev.findIndex(
                   (t) => t.id === tareaActualizada.id
@@ -111,8 +123,10 @@ export default function TareasTable({
                 const newTareas = [...prev];
                 newTareas[index] = tareaActualizada;
 
-                // ✅ IMPORTANTE: Notificar al padre que las tareas cambiaron
-                onTareasChange?.(newTareas);
+                // ✅ Notificar al padre DESPUÉS del render para evitar error de React
+                setTimeout(() => {
+                  onTareasChange?.(newTareas);
+                }, 0);
 
                 return newTareas;
               });
@@ -138,21 +152,11 @@ export default function TareasTable({
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({
                             taskId: tareaActualizada.id,
-                            title: `✅ [FINALIZADA] ${
-                              tareaActualizada.nombre || "Sin título"
-                            }`,
+                            title: `${tareaActualizada.nombre || "Sin título"}`,
                             completed: true,
                           }),
                         }
                       );
-
-                      if (response.ok) {
-                        console.log(
-                          "✅ Tarea marcada como finalizada en calendario"
-                        );
-                      } else if (response.status === 404) {
-                        console.log("⚠️ Evento no encontrado en calendario");
-                      }
                     } catch (calendarError) {
                       console.warn(
                         "Error actualizando estado en calendario:",
@@ -256,7 +260,9 @@ export default function TareasTable({
 
       if (procesosRes.data) setProcesos(procesosRes.data);
       if (estadosRes.data) setEstados(estadosRes.data);
-      if (empleadosRes.data) setEmpleados(empleadosRes.data);
+      if (empleadosRes.data) {
+        setEmpleados(empleadosRes.data);
+      }
     } catch (error) {
       console.error("Error cargando catálogos:", error);
     }
@@ -303,19 +309,12 @@ export default function TareasTable({
 
         // Solo sincronizar si la tarea empieza con palabras clave
         if (!debeSincronizarConCalendario(tarea?.nombre)) {
-          console.log(
-            "⏭️ Tarea no requiere sincronización con calendario:",
-            tarea?.nombre
-          );
           return;
         }
 
         // Prevenir llamadas duplicadas simultáneas
         const calendarioKey = `fecha-${tareaId}`;
         if (calendarioEnProgreso.current.has(calendarioKey)) {
-          console.log(
-            "⏳ Actualización de calendario ya en progreso, omitiendo..."
-          );
           return;
         }
 
@@ -340,7 +339,7 @@ export default function TareasTable({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               taskId: tareaId,
-              title: `[TAREA] ${tarea?.nombre || "Sin título"}`,
+              title: `${tarea?.nombre || "Sin título"}`,
               start: fechaVencimiento.toISOString(),
               end: fechaFin.toISOString(),
             }),
@@ -348,12 +347,12 @@ export default function TareasTable({
 
           if (!response.ok && response.status === 404) {
             // Si no existe evento, crear uno nuevo
-            console.log("📅 Evento no existe, creando nuevo...");
+
             await fetch("/api/calendar/events/create", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                title: `[TAREA] ${tarea?.nombre || "Sin título"}`,
+                title: `${tarea?.nombre || "Sin título"}`,
                 description: tarea?.descripcion || "Tarea pendiente",
                 start: fechaVencimiento.toISOString(),
                 end: fechaFin.toISOString(),
@@ -542,7 +541,7 @@ export default function TareasTable({
                   </div>
                 </th>
                 <ColumnHeader
-                  label="Responsable"
+                  label="Responsables"
                   columnId="responsable"
                   onSort={handleSort}
                   currentSort={sortConfig}
@@ -688,44 +687,13 @@ function SortableRow({
         estados={estados}
         onChange={(id) => actualizarCelda(tarea.id, "estado_id", id)}
         disabled={estaFinalizada}
-        className="min-w-[120px]"
+        className="min-w-[130px] text-sm"
       />
       {/* Responsable (editable) */}
-      <SelectCell
-        value={
-          tarea.empleados_responsables?.[0]?.empleado?.id ||
-          tarea.empleados_responsables?.[0]?.id
-        }
-        options={empleados.map((e) => ({
-          id: e.id,
-          nombre: `${e.nombre} ${e.apellido}`,
-        }))}
+      <EmpleadosDisplay
+        empleados={tarea.empleados_responsables || []}
+        onTareaClick={() => onTareaClick?.(tarea)}
         disabled={estaFinalizada}
-        onChange={async (empId) => {
-          try {
-            // Eliminar todos los responsables actuales
-            await supabase
-              .from("tareas_empleados_responsables")
-              .delete()
-              .eq("tarea_id", tarea.id);
-
-            // Insertar el nuevo responsable
-            if (empId) {
-              const { error } = await supabase
-                .from("tareas_empleados_responsables")
-                .insert({ tarea_id: tarea.id, empleado_id: empId });
-
-              if (error) throw error;
-            }
-
-            // Recargar tareas para ver cambios
-            onUpdate?.();
-          } catch (error) {
-            console.error("Error actualizando responsable:", error);
-            toast.error("Error al actualizar responsable");
-          }
-        }}
-        placeholder="Sin responsable"
       />
       {/* Fecha Vencimiento */}
       <DateCell
@@ -737,8 +705,8 @@ function SortableRow({
       <BadgeCell
         value={tarea.importancia}
         options={[
-          { id: "importante", nombre: "Alta", color: "#EF4444" },
-          { id: "no importante", nombre: "Baja", color: "#10B981" },
+          { id: "importante", nombre: "Importante", color: "#EF4444" },
+          { id: "no importante", nombre: "No importante", color: "#10B981" },
         ]}
         disabled={estaFinalizada}
         onChange={(val) => actualizarCelda(tarea.id, "importancia", val)}
@@ -748,7 +716,7 @@ function SortableRow({
         value={tarea.urgencia}
         options={[
           { id: "urgente", nombre: "Urgente", color: "#F59E0B" },
-          { id: "no urgente", nombre: "Normal", color: "#3B82F6" },
+          { id: "no urgente", nombre: "No urgente", color: "#3B82F6" },
         ]}
         disabled={estaFinalizada}
         onChange={(val) => actualizarCelda(tarea.id, "urgencia", val)}
@@ -931,7 +899,7 @@ function EstadoCell({
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-[9999] bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-[200px] max-h-[400px] overflow-y-auto"
+            className="z-[9999] bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-[160px] max-h-[400px] overflow-y-auto"
           >
             {categorias.map((categoria) => {
               const estadosCategoria = estadosAgrupados[categoria.key];
@@ -1228,6 +1196,86 @@ function SelectCell({
           </div>,
           document.body
         )}
+    </td>
+  );
+}
+
+// Componente para mostrar empleados como badges coloridos
+function EmpleadosDisplay({ empleados, onTareaClick, disabled }) {
+  // Función para generar color único basado en ID del empleado
+  const getEmpleadoColor = (empleadoId, nombreEmpleado = "") => {
+    const colores = [
+      { bg: "#DBEAFE", text: "#2563EB" }, // Azul
+      { bg: "#D1FAE5", text: "#059669" }, // Verde
+      { bg: "#FEF3C7", text: "#D8A66CFF" }, // Naranja
+      { bg: "#EDE9FE", text: "#7C3AED" }, // Púrpura
+      { bg: "#FCE7F3", text: "#DB2777" }, // Rosa
+      { bg: "#BAE6FD", text: "#0284C7" }, // Azul claro
+      { bg: "#FED7AA", text: "#D78559FF" }, // Naranja claro
+      { bg: "#A7F3D0", text: "#047857" }, // Verde claro
+      { bg: "#FEE2E2", text: "#DC2626" }, // Rojo
+      { bg: "#C7D2FE", text: "#4338CA" }, // Índigo
+    ];
+
+    // Convertir UUID a número para el hash
+    let hash = 0;
+    const idStr = String(empleadoId || nombreEmpleado || "default");
+
+    for (let i = 0; i < idStr.length; i++) {
+      const char = idStr.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash; // Convertir a 32bit integer
+    }
+
+    // Usar multiplicación dorada para mejor distribución
+    hash = Math.abs(hash);
+    const index = (hash * 2654435761) % colores.length;
+
+    return colores[index];
+  };
+
+  const empleadosArray = Array.isArray(empleados) ? empleados : [];
+  const empleadosValidos = empleadosArray.filter(
+    (emp) => emp && (emp.empleado?.nombre || emp.nombre)
+  );
+
+  return (
+    <td className="px-3 py-1.5 border-r relative group">
+      <div className="flex flex-wrap gap-1 min-w-[150px]">
+        {empleadosValidos.length > 0 ? (
+          empleadosValidos.map((item, index) => {
+            const empleado = item.empleado || item;
+            const nombre = empleado.nombre
+              ? empleado.nombre.split(" ")[0]
+              : "Sin nombre";
+            const colorObj = getEmpleadoColor(empleado.id, empleado.nombre);
+
+            return (
+              <span
+                key={empleado.id || index}
+                className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
+                style={{
+                  backgroundColor: colorObj.bg,
+                  color: colorObj.text,
+                }}
+              >
+                {nombre}
+              </span>
+            );
+          })
+        ) : (
+          <span className="text-xs text-gray-400">Sin responsables</span>
+        )}
+
+        {/* Botón para abrir panel (visible en hover) */}
+        <button
+          onClick={() => onTareaClick?.()}
+          className="ml-1 text-gray-300 hover:text-primary-600 transition-colors opacity-0 group-hover:opacity-100"
+          title="Editar responsables"
+        >
+          <PanelRightOpen className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </td>
   );
 }
