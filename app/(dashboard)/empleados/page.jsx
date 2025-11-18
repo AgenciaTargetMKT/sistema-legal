@@ -5,7 +5,16 @@ import { supabase } from "@/lib/supabase";
 import { formatearFecha } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import EmpleadoDialog from "@/components/dashboard/empleado-dialog";
 import {
   UserCog,
   Plus,
@@ -15,20 +24,31 @@ import {
   Shield,
   Mail,
   Phone,
-  MapPin,
   Calendar,
   MoreHorizontal,
   Eye,
   Edit,
   CheckCircle,
   XCircle,
+  Trash2,
+  Briefcase,
+  GraduationCap,
+  MapPin,
+  User,
 } from "lucide-react";
+
+const SUPABASE_FUNCTIONS_URL = 'https://maketrlnjyibknqhdsah.supabase.co/functions/v1';
 
 export default function EmpleadosPage() {
   const [empleados, setEmpleados] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("todos");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [empleadoEdit, setEmpleadoEdit] = useState(null);
+  const [menuAbierto, setMenuAbierto] = useState(null);
+  const [verDetalleOpen, setVerDetalleOpen] = useState(false);
+  const [empleadoDetalle, setEmpleadoDetalle] = useState(null);
 
   useEffect(() => {
     cargarEmpleados();
@@ -62,7 +82,7 @@ export default function EmpleadosPage() {
       empleado.nombre?.toLowerCase().includes(searchLower) ||
       empleado.apellido?.toLowerCase().includes(searchLower) ||
       empleado.email?.toLowerCase().includes(searchLower) ||
-      empleado.documento_identidad?.toLowerCase().includes(searchLower);
+      empleado.cargo?.toLowerCase().includes(searchLower);
 
     const matchEstado =
       filtroEstado === "todos" ||
@@ -71,6 +91,172 @@ export default function EmpleadosPage() {
 
     return matchSearch && matchEstado;
   });
+
+  // Funciones para los botones
+  const handleNuevoEmpleado = () => {
+    setEmpleadoEdit(null);
+    setDialogOpen(true);
+  };
+
+  const handleEditarEmpleado = (empleado) => {
+    setEmpleadoEdit(empleado);
+    setDialogOpen(true);
+    setMenuAbierto(null);
+  };
+
+  const handleVerEmpleado = (empleado) => {
+    setEmpleadoDetalle(empleado);
+    setVerDetalleOpen(true);
+    setMenuAbierto(null);
+  };
+
+  // Función para crear usuario en Auth via Edge Function
+  const crearUsuarioAuth = async (email, telefono, nombre, apellido) => {
+    try {
+      // Obtener el token de sesión actual
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No hay sesión activa');
+      }
+
+      const password = telefono ? telefono.replace(/\D/g, '').substring(0, 6) : '123456';
+
+      const response = await fetch('/functions/v1/create-empleado-auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          nombre,
+          apellido,
+          action: 'create'
+        })
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      return result.user.id;
+    } catch (error) {
+      console.error("Error al crear usuario auth:", error);
+      throw error;
+    }
+  };
+
+  // Función para eliminar usuario Auth
+  const eliminarUsuarioAuth = async (authUserId) => {
+    try {
+      // Obtener el token de sesión actual
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No hay sesión activa');
+      }
+
+      console.log('=== ELIMINANDO USUARIO AUTH ===');
+      console.log('Usuario target:', authUserId);
+
+      const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/create-empleado-auth`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          userId: authUserId,
+          action: 'delete'
+        })
+      });
+
+      console.log('Respuesta de eliminación:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Error HTTP: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('Resultado eliminación:', result);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error al eliminar usuario auth:", error);
+      return false;
+    }
+  };
+
+  const handleToggleActivo = async (empleado) => {
+    const nuevoEstado = !empleado.activo;
+
+    try {
+      if (nuevoEstado === false && empleado.auth_user_id) {
+        // Desactivar: eliminar usuario Auth
+        const authEliminado = await eliminarUsuarioAuth(empleado.auth_user_id);
+
+        if (!authEliminado) {
+          console.warn("No se pudo eliminar el usuario Auth, pero continuamos con la actualización");
+        }
+      }
+
+      // Actualizar estado en la base de datos
+      const updateData = { activo: nuevoEstado };
+
+      if (nuevoEstado === false) {
+        // Al desactivar, limpiar auth_user_id
+        updateData.auth_user_id = null;
+      } else if (nuevoEstado === true && !empleado.auth_user_id) {
+        // Al activar, crear nuevo usuario Auth
+        try {
+          const nuevoAuthUserId = await crearUsuarioAuth(
+            empleado.email,
+            empleado.telefono,
+            empleado.nombre,
+            empleado.apellido
+          );
+          updateData.auth_user_id = nuevoAuthUserId;
+        } catch (authError) {
+          console.warn("No se pudo crear usuario Auth, continuando sin auth:", authError);
+          // Continuamos sin el usuario auth
+        }
+      }
+
+      const { error } = await supabase
+        .from("empleados")
+        .update(updateData)
+        .eq("id", empleado.id);
+
+      if (error) throw error;
+
+      // Recargar la lista
+      await cargarEmpleados();
+
+      if (nuevoEstado === false) {
+        alert(`Empleado desactivado correctamente. Su acceso al sistema ha sido revocado.`);
+      } else {
+        if (updateData.auth_user_id) {
+          alert(`Empleado activado correctamente. Se ha creado un nuevo acceso al sistema con contraseña temporal (primeros 6 dígitos del teléfono).`);
+        } else {
+          alert(`Empleado activado correctamente, pero no se pudo crear el acceso al sistema.`);
+        }
+      }
+
+    } catch (error) {
+      console.error("Error al cambiar estado:", error);
+      alert("Error al cambiar estado: " + error.message);
+    } finally {
+      setMenuAbierto(null);
+    }
+  };
 
   // Estadísticas
   const stats = {
@@ -113,7 +299,7 @@ export default function EmpleadosPage() {
             Gestiona el equipo de trabajo del estudio legal
           </p>
         </div>
-        <Button size="lg" className="gap-2">
+        <Button size="lg" className="cursor-pointer gap-2" onClick={handleNuevoEmpleado}>
           <Plus className="h-5 w-5" />
           Nuevo Empleado
         </Button>
@@ -185,7 +371,7 @@ export default function EmpleadosPage() {
               <div className="relative flex-1 md:w-80">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar por nombre, email o documento..."
+                  placeholder="Buscar por nombre, email o cargo..."
                   className="pl-8"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -200,9 +386,6 @@ export default function EmpleadosPage() {
                 <option value="activo">Activos</option>
                 <option value="inactivo">Inactivos</option>
               </select>
-              <Button variant="outline" size="icon">
-                <Filter className="h-4 w-4" />
-              </Button>
             </div>
           </div>
         </CardHeader>
@@ -226,7 +409,7 @@ export default function EmpleadosPage() {
                   : "Comienza agregando tu primer empleado"}
               </p>
               {!searchTerm && (
-                <Button>
+                <Button onClick={handleNuevoEmpleado}>
                   <Plus className="mr-2 h-4 w-4" />
                   Agregar Empleado
                 </Button>
@@ -256,19 +439,57 @@ export default function EmpleadosPage() {
                             </p>
                           </div>
                         </div>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
+                        <div className="relative">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setMenuAbierto(menuAbierto === empleado.id ? null : empleado.id)}
+                            className={`cursor-pointer`}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+
+                          {menuAbierto === empleado.id && (
+                            <div className="absolute right-0 top-10 z-10 w-48 rounded-md border bg-white shadow-lg">
+                              <div className="p-1">
+                                <button
+                                  onClick={() => handleVerEmpleado(empleado)}
+                                  className="cursor-pointer flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-gray-100"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                  Ver detalles
+                                </button>
+                                <button
+                                  onClick={() => handleEditarEmpleado(empleado)}
+                                  className="cursor-pointer flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-gray-100"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                  Editar
+                                </button>
+                                <button
+                                  onClick={() => handleToggleActivo(empleado)}
+                                  className={`cursor-pointer flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-gray-100 ${empleado.activo ? "text-red-600" : "text-green-600"}`}
+                                >
+                                  {empleado.activo ? (
+                                    <>
+                                      <XCircle className="h-4 w-4" />
+                                      Desactivar
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle className="h-4 w-4" />
+                                      Activar
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       {/* Info */}
                       <div className="space-y-1.5 text-sm">
-                        {empleado.documento_identidad && (
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <span className="font-medium">DNI:</span>
-                            <span>{empleado.documento_identidad}</span>
-                          </div>
-                        )}
                         {empleado.email && (
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <Mail className="h-3.5 w-3.5" />
@@ -283,20 +504,23 @@ export default function EmpleadosPage() {
                             <span>{empleado.telefono}</span>
                           </div>
                         )}
-                        {empleado.direccion && (
-                          <div className="flex items-start gap-2 text-muted-foreground">
-                            <MapPin className="h-3.5 w-3.5 mt-0.5" />
-                            <span className="text-xs line-clamp-2">
-                              {empleado.direccion}
-                            </span>
+                        {empleado.cargo && (
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <span className="font-medium">Cargo:</span>
+                            <span className="text-xs">{empleado.cargo}</span>
                           </div>
                         )}
-                        {empleado.fecha_contratacion && (
+                        {empleado.especialidad && (
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <span className="font-medium">Especialidad:</span>
+                            <span className="text-xs">{empleado.especialidad}</span>
+                          </div>
+                        )}
+                        {empleado.fecha_ingreso && (
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <Calendar className="h-3.5 w-3.5" />
                             <span className="text-xs">
-                              Desde{" "}
-                              {formatearFecha(empleado.fecha_contratacion)}
+                              Ingreso: {formatearFecha(empleado.fecha_ingreso)}
                             </span>
                           </div>
                         )}
@@ -326,18 +550,6 @@ export default function EmpleadosPage() {
                           </span>
                         )}
                       </div>
-
-                      {/* Actions */}
-                      <div className="flex gap-2 pt-2 border-t">
-                        <Button variant="outline" size="sm" className="flex-1">
-                          <Eye className="mr-1.5 h-3.5 w-3.5" />
-                          Ver
-                        </Button>
-                        <Button variant="outline" size="sm" className="flex-1">
-                          <Edit className="mr-1.5 h-3.5 w-3.5" />
-                          Editar
-                        </Button>
-                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -346,6 +558,183 @@ export default function EmpleadosPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog */}
+      <EmpleadoDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        empleado={empleadoEdit}
+        onSuccess={cargarEmpleados}
+      />
+
+      {/* Dialog de Detalles */}
+      <Dialog open={verDetalleOpen} onOpenChange={setVerDetalleOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Detalles del Empleado
+            </DialogTitle>
+            <DialogDescription>
+              Información completa del empleado
+            </DialogDescription>
+          </DialogHeader>
+
+          {empleadoDetalle && (
+            <div className="space-y-6">
+              {/* Información Personal */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Información Personal
+                </h3>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Nombres</Label>
+                    <p className="text-sm font-medium">{empleadoDetalle.nombre}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Apellidos</Label>
+                    <p className="text-sm font-medium">{empleadoDetalle.apellido}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500 flex items-center gap-1">
+                      <Mail className="h-3 w-3" />
+                      Email
+                    </Label>
+                    <p className="text-sm">{empleadoDetalle.email}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500 flex items-center gap-1">
+                      <Phone className="h-3 w-3" />
+                      Teléfono
+                    </Label>
+                    <p className="text-sm">{empleadoDetalle.telefono || 'No especificado'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Información Laboral */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Información Laboral
+                </h3>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500 flex items-center gap-1">
+                      <Briefcase className="h-3 w-3" />
+                      Cargo
+                    </Label>
+                    <p className="text-sm">{empleadoDetalle.cargo || 'No especificado'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500 flex items-center gap-1">
+                      <GraduationCap className="h-3 w-3" />
+                      Especialidad
+                    </Label>
+                    <p className="text-sm">{empleadoDetalle.especialidad || 'No especificada'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500 flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      Fecha de Ingreso
+                    </Label>
+                    <p className="text-sm">
+                      {empleadoDetalle.fecha_ingreso
+                        ? formatearFecha(empleadoDetalle.fecha_ingreso)
+                        : 'No especificada'}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500 flex items-center gap-1">
+                      <Shield className="h-3 w-3" />
+                      Rol
+                    </Label>
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${getRolColor(
+                        empleadoDetalle.rol?.nombre
+                      )}`}
+                    >
+                      {empleadoDetalle.rol?.nombre || 'Sin rol asignado'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Estado y Sistema */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Estado y Acceso
+                </h3>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Estado</Label>
+                    <div>
+                      {empleadoDetalle.activo ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700">
+                          <CheckCircle className="h-4 w-4" />
+                          Activo
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
+                          <XCircle className="h-4 w-4" />
+                          Inactivo
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Acceso al Sistema</Label>
+                    <div>
+                      {empleadoDetalle.auth_user_id ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700">
+                          <CheckCircle className="h-4 w-4" />
+                          Con acceso
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-3 py-1 text-sm font-medium text-orange-700">
+                          <XCircle className="h-4 w-4" />
+                          Sin acceso
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Información del Sistema */}
+              {empleadoDetalle.rol?.descripcion && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                    Descripción del Rol
+                  </h3>
+                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
+                    {empleadoDetalle.rol.descripcion}
+                  </p>
+                </div>
+              )}
+
+              {/* Botones de Acción */}
+              <div className="flex gap-2 justify-end pt-4 border-t">
+                <Button
+                  variant="outline"
+                  onClick={() => setVerDetalleOpen(false)}
+                >
+                  Cerrar
+                </Button>
+                <Button
+                  onClick={() => {
+                    setVerDetalleOpen(false);
+                    handleEditarEmpleado(empleadoDetalle);
+                  }}
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Editar Empleado
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
