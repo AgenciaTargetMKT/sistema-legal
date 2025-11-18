@@ -6,9 +6,11 @@ import { formatearFecha, estaVencido } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import TareaDialog from "@/components/dashboard/tarea-dialog";
+
 import TareasTable from "@/components/editable-table/TareasTable";
 import TareaPanel from "@/components/editable-table/TareaPanel";
+import toast from "react-hot-toast";
+import { motion } from "framer-motion";
 import {
   CheckSquare,
   Plus,
@@ -43,33 +45,28 @@ export default function TareasPage() {
   }, []);
 
   // Sincronizar tareaSeleccionada cuando la tabla se actualiza
+  // SOLO si el panel está abierto Y hay una tarea seleccionada (no nueva tarea)
   useEffect(() => {
-    if (tareaSeleccionada?.id && tareas.length > 0) {
-      const tareaActualizada = tareas.find(
-        (t) => t.id === tareaSeleccionada.id
-      );
-      if (tareaActualizada) {
-        // Solo actualizar si realmente cambió
-        const hasChanged =
-          JSON.stringify(tareaActualizada) !==
-          JSON.stringify(tareaSeleccionada);
-        if (hasChanged) {
-          console.log("🔄 Sincronizando tareaSeleccionada:", {
-            antes: {
-              descripcion: tareaSeleccionada.descripcion,
-              observaciones: tareaSeleccionada.observaciones,
-            },
-            despues: {
-              descripcion: tareaActualizada.descripcion,
-              observaciones: tareaActualizada.observaciones,
-            },
-          });
-          setTareaSeleccionada(tareaActualizada);
-        }
-      }
+    // No sincronizar si el panel está cerrado o es una nueva tarea (tareaSeleccionada es null)
+    if (!panelOpen || !tareaSeleccionada?.id) {
+      console.log("⏭️ No sincronizar:", {
+        panelOpen,
+        tieneId: !!tareaSeleccionada?.id,
+      });
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tareas]);
+
+    const tareaActualizada = tareas.find((t) => t.id === tareaSeleccionada.id);
+
+    if (tareaActualizada) {
+      console.log("🔄 Sincronizando tareaSeleccionada con cambios de tabla:", {
+        id: tareaActualizada.id,
+        nombre: tareaActualizada.nombre,
+        estado: tareaActualizada.estado?.nombre,
+      });
+      setTareaSeleccionada(tareaActualizada);
+    }
+  }, [tareas, panelOpen, tareaSeleccionada?.id]); // IMPORTANTE: incluir panelOpen y tareaSeleccionada?.id
 
   const cargarTareas = async () => {
     try {
@@ -80,42 +77,48 @@ export default function TareasPage() {
           `
           *,
           proceso:procesos(id, nombre),
-          empleado_asignado:empleados(nombre, apellido),
-          estado:estados_tarea(nombre, color)
+          estado:estados_tarea(id, nombre, color, categoria),
+          cliente:clientes(id, nombre),
+          empleados_designados:tareas_empleados_designados(empleado:empleados(id, nombre, apellido)),
+          empleados_responsables:tareas_empleados_responsables(empleado:empleados(id, nombre, apellido))
         `
         )
         .order("orden", { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error("❌ Error cargando tareas:", error);
+        throw error;
+      }
+
+      console.log("✅ Tareas cargadas:", data?.length, "tareas");
       setTareas(data || []);
     } catch (error) {
       console.error("Error al cargar tareas:", error);
+      toast.error("Error al cargar tareas: " + error.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleNuevaTarea = () => {
-    // Crear una tarea vacía para el panel
-    setTareaSeleccionada({
-      id: null,
-      nombre: "",
-      descripcion: "",
-      proceso_id: null,
-      estado_id: null,
-      prioridad: "media",
-      empleado_asignado_id: null,
-      fecha_limite: null,
-      fecha_vencimiento: null,
-      fecha_completada: null,
-      tiempo_estimado: null,
-      tiempo_real: null,
-      observaciones: "",
-    });
-    setPanelOpen(true);
+    console.log("➕ Abriendo panel para nueva tarea");
+    // Primero cerrar el panel si estaba abierto
+    if (panelOpen) {
+      setPanelOpen(false);
+      // Esperar a que se cierre antes de abrir con nueva tarea
+      setTimeout(() => {
+        setTareaSeleccionada(null);
+        setPanelOpen(true);
+      }, 100);
+    } else {
+      // Si está cerrado, abrir directamente
+      setTareaSeleccionada(null);
+      setPanelOpen(true);
+    }
   };
 
   const handleEditarTarea = (tarea) => {
+    console.log("✏️ Abriendo panel para editar tarea:", tarea.id);
     setTareaSeleccionada(tarea);
     setPanelOpen(true);
   };
@@ -127,9 +130,13 @@ export default function TareasPage() {
   const tareasFiltradas = tareas.filter((tarea) => {
     const searchLower = searchTerm.toLowerCase();
     const matchSearch =
-      tarea.titulo?.toLowerCase().includes(searchLower) ||
+      tarea.nombre?.toLowerCase().includes(searchLower) ||
       tarea.proceso?.nombre?.toLowerCase().includes(searchLower) ||
-      tarea.empleado_asignado?.nombre?.toLowerCase().includes(searchLower);
+      tarea.empleados_responsables?.some(
+        (emp) =>
+          emp.empleado?.nombre?.toLowerCase().includes(searchLower) ||
+          emp.empleado?.apellido?.toLowerCase().includes(searchLower)
+      );
 
     const matchEstado =
       filtroEstado === "todos" ||
@@ -185,16 +192,35 @@ export default function TareasPage() {
   };
 
   return (
-    <div className="space-y-6 bg">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="space-y-6 bg"
+    >
       {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
+      <motion.div
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+        className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+      >
+        <motion.div
+          initial={{ scale: 0.95 }}
+          animate={{ scale: 1 }}
+          transition={{ duration: 0.3, delay: 0.2 }}
+        >
           <h1 className="text-3xl font-bold tracking-tight">Tareas</h1>
           <p className="text-muted-foreground">
             Gestiona las tareas de tus procesos legales
           </p>
-        </div>
-        <div className="flex gap-2">
+        </motion.div>
+        <motion.div
+          initial={{ x: 20, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          transition={{ duration: 0.4, delay: 0.25 }}
+          className="flex gap-2"
+        >
           <div className="flex border rounded-lg overflow-hidden">
             <Button
               variant={vistaActual === "tabla" ? "default" : "ghost"}
@@ -215,15 +241,21 @@ export default function TareasPage() {
               Cards
             </Button>
           </div>
-          <Button size="lg" className="gap-2" onClick={handleNuevaTarea}>
-            <Plus className="h-5 w-5" />
-            Nueva Tarea
-          </Button>
-        </div>
-      </div>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button size="lg" className="gap-2" onClick={handleNuevaTarea}>
+              <Plus className="h-5 w-5" />
+              Nueva Tarea
+            </Button>
+          </motion.div>
+        </motion.div>
+      </motion.div>
 
       {/* Search and Filters */}
-      <div>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.3 }}
+      >
         <CardHeader>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex gap-2">
@@ -283,154 +315,169 @@ export default function TareasPage() {
               tareas={tareasFiltradas}
               onUpdate={cargarTareas}
               onTareaClick={handleEditarTarea}
+              onTareasChange={setTareas}
             />
           ) : (
             <div className="space-y-3">
-              {tareasFiltradas.map((tarea) => {
+              {tareasFiltradas.map((tarea, index) => {
                 const vencida =
                   tarea.fecha_vencimiento &&
                   estaVencido(tarea.fecha_vencimiento) &&
                   tarea.estado?.nombre?.toLowerCase() !== "completada";
 
                 return (
-                  <Card
+                  <motion.div
                     key={tarea.id}
-                    className={`hover:shadow-md transition-shadow ${
-                      vencida ? "border-red-300 bg-red-50/50" : ""
-                    }`}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                    whileHover={{ scale: 1.01, y: -2 }}
                   >
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-4">
-                        {/* Estado Icon */}
-                        <div
-                          className="mt-1 rounded-full p-2"
-                          style={{
-                            backgroundColor: `${tarea.estado?.color}20`,
-                          }}
-                        >
-                          <div style={{ color: tarea.estado?.color }}>
-                            {getEstadoIcon(tarea.estado?.nombre)}
-                          </div>
-                        </div>
-
-                        {/* Contenido */}
-                        <div className="flex-1 space-y-2">
-                          {/* Header */}
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1">
-                              <h3 className="font-semibold">{tarea.titulo}</h3>
-                              {tarea.descripcion && (
-                                <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
-                                  {tarea.descripcion}
-                                </p>
-                              )}
+                    <Card
+                      className={`hover:shadow-md transition-shadow cursor-pointer ${
+                        vencida ? "border-red-300 bg-red-50/50" : ""
+                      }`}
+                      onClick={() => handleEditarTarea(tarea)}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-4">
+                          {/* Estado Icon */}
+                          <div
+                            className="mt-1 rounded-full p-2"
+                            style={{
+                              backgroundColor: `${tarea.estado?.color}20`,
+                            }}
+                          >
+                            <div style={{ color: tarea.estado?.color }}>
+                              {getEstadoIcon(tarea.estado?.nombre)}
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="shrink-0"
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
                           </div>
 
-                          {/* Info */}
-                          <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-                            {tarea.proceso && (
-                              <div className="flex items-center gap-1.5">
-                                <FileText className="h-3.5 w-3.5" />
-                                <span>{tarea.proceso.nombre}</span>
-                              </div>
-                            )}
-                            {tarea.empleado_asignado && (
-                              <div className="flex items-center gap-1.5">
-                                <User className="h-3.5 w-3.5" />
-                                <span>
-                                  {tarea.empleado_asignado.nombre}{" "}
-                                  {tarea.empleado_asignado.apellido}
-                                </span>
-                              </div>
-                            )}
-                            {tarea.fecha_vencimiento && (
-                              <div
-                                className={`flex items-center gap-1.5 ${
-                                  vencida ? "text-red-600 font-medium" : ""
-                                }`}
-                              >
-                                <Calendar className="h-3.5 w-3.5" />
-                                <span>
-                                  {formatearFecha(tarea.fecha_vencimiento)}
-                                </span>
-                                {vencida && (
-                                  <AlertCircle className="h-3.5 w-3.5" />
+                          {/* Contenido */}
+                          <div className="flex-1 space-y-2">
+                            {/* Header */}
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1">
+                                <h3 className="font-semibold">
+                                  {tarea.titulo}
+                                </h3>
+                                {tarea.descripcion && (
+                                  <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                                    {tarea.descripcion}
+                                  </p>
                                 )}
                               </div>
-                            )}
-                          </div>
-
-                          {/* Badges y Actions */}
-                          <div className="flex items-center justify-between">
-                            <div className="flex flex-wrap gap-1.5">
-                              {tarea.prioridad && (
-                                <span
-                                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${getPrioridadColor(
-                                    tarea.prioridad
-                                  )}`}
-                                >
-                                  {tarea.prioridad}
-                                </span>
-                              )}
-                              {tarea.estado && (
-                                <span
-                                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
-                                  style={{
-                                    backgroundColor: `${tarea.estado.color}20`,
-                                    color: tarea.estado.color,
-                                  }}
-                                >
-                                  {getEstadoIcon(tarea.estado.nombre)}
-                                  {tarea.estado.nombre}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex gap-1">
-                              <Button variant="ghost" size="sm">
-                                <Eye className="h-3.5 w-3.5" />
-                              </Button>
                               <Button
                                 variant="ghost"
-                                size="sm"
-                                onClick={() => handleEditarTarea(tarea)}
+                                size="icon"
+                                className="shrink-0"
                               >
-                                <Edit className="h-3.5 w-3.5" />
+                                <MoreHorizontal className="h-4 w-4" />
                               </Button>
+                            </div>
+
+                            {/* Info */}
+                            <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+                              {tarea.proceso && (
+                                <div className="flex items-center gap-1.5">
+                                  <FileText className="h-3.5 w-3.5" />
+                                  <span>{tarea.proceso.nombre}</span>
+                                </div>
+                              )}
+                              {tarea.empleado_asignado && (
+                                <div className="flex items-center gap-1.5">
+                                  <User className="h-3.5 w-3.5" />
+                                  <span>
+                                    {tarea.empleado_asignado.nombre}{" "}
+                                    {tarea.empleado_asignado.apellido}
+                                  </span>
+                                </div>
+                              )}
+                              {tarea.fecha_vencimiento && (
+                                <div
+                                  className={`flex items-center gap-1.5 ${
+                                    vencida ? "text-red-600 font-medium" : ""
+                                  }`}
+                                >
+                                  <Calendar className="h-3.5 w-3.5" />
+                                  <span>
+                                    {formatearFecha(tarea.fecha_vencimiento)}
+                                  </span>
+                                  {vencida && (
+                                    <AlertCircle className="h-3.5 w-3.5" />
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Badges y Actions */}
+                            <div className="flex items-center justify-between">
+                              <div className="flex flex-wrap gap-1.5">
+                                {tarea.prioridad && (
+                                  <span
+                                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${getPrioridadColor(
+                                      tarea.prioridad
+                                    )}`}
+                                  >
+                                    {tarea.prioridad}
+                                  </span>
+                                )}
+                                {tarea.estado && (
+                                  <span
+                                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+                                    style={{
+                                      backgroundColor: `${tarea.estado.color}20`,
+                                      color: tarea.estado.color,
+                                    }}
+                                  >
+                                    {getEstadoIcon(tarea.estado.nombre)}
+                                    {tarea.estado.nombre}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex gap-1">
+                                <Button variant="ghost" size="sm">
+                                  <Eye className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEditarTarea(tarea)}
+                                >
+                                  <Edit className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
                 );
               })}
             </div>
           )}
         </CardContent>
-      </div>
+      </motion.div>
 
-      <TareaDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        tarea={tareaSeleccionada}
-        onSuccess={handleSuccess}
-      />
+
 
       <TareaPanel
-        key={tareaSeleccionada?.id || "new"}
+        key={
+          panelOpen ? tareaSeleccionada?.id || `new-${Date.now()}` : "closed"
+        }
         tarea={tareaSeleccionada}
         isOpen={panelOpen}
-        onClose={() => setPanelOpen(false)}
+        onClose={() => {
+          console.log("🚪 Cerrando panel");
+          setPanelOpen(false);
+          // Limpiar tareaSeleccionada después de un pequeño delay para que la animación termine
+          setTimeout(() => {
+            setTareaSeleccionada(null);
+          }, 300);
+        }}
         onUpdate={cargarTareas}
       />
-    </div>
+    </motion.div>
   );
 }

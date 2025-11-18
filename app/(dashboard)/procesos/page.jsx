@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import ProcesosTable from "@/components/editable-table/ProcesosTable";
 import ProcesoPanel from "@/components/editable-table/ProcesoPanel";
-import TareaDialog from "@/components/dashboard/tarea-dialog";
+
 import ProcesoDialog from "@/components/dashboard/proceso-dialog";
 import {
   Scale,

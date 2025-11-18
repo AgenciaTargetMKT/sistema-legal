@@ -23,12 +23,14 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, PanelRightOpen, Trash2 } from "lucide-react";
+import toast from "react-hot-toast";
 import ColumnHeader from "./ColumnHeader";
 
 export default function TareasTable({
   tareas: initialTareas,
   onUpdate,
   onTareaClick,
+  onTareasChange,
 }) {
   const [tareas, setTareas] = useState(initialTareas || []);
   const [procesos, setProcesos] = useState([]);
@@ -48,6 +50,11 @@ export default function TareasTable({
   );
 
   useEffect(() => {
+    console.log(
+      "📋 TareasTable recibió tareas:",
+      initialTareas?.length,
+      initialTareas
+    );
     setTareas(initialTareas || []);
   }, [initialTareas]);
 
@@ -79,8 +86,10 @@ export default function TareasTable({
                 `
                 *,
                 proceso:procesos(id, nombre),
-                estado:estados_tarea(id, nombre, color),
-                empleado_asignado:empleados(id, nombre, apellido)
+                estado:estados_tarea(id, nombre, color, categoria),
+                cliente:clientes(id, nombre),
+                empleados_designados:tareas_empleados_designados(empleado:empleados(id, nombre, apellido)),
+                empleados_responsables:tareas_empleados_responsables(empleado:empleados(id, nombre, apellido))
               `
               )
               .eq("id", payload.new.id)
@@ -91,7 +100,9 @@ export default function TareasTable({
                 id: tareaActualizada.id,
                 fecha_vencimiento: tareaActualizada.fecha_vencimiento,
                 estado: tareaActualizada.estado?.nombre,
+                responsables: tareaActualizada.empleados_responsables?.length,
               });
+
               setTareas((prev) => {
                 const index = prev.findIndex(
                   (t) => t.id === tareaActualizada.id
@@ -99,11 +110,72 @@ export default function TareasTable({
                 if (index === -1) return prev;
                 const newTareas = [...prev];
                 newTareas[index] = tareaActualizada;
+
+                // ✅ IMPORTANTE: Notificar al padre que las tareas cambiaron
+                onTareasChange?.(newTareas);
+
                 return newTareas;
               });
+
+              // Si se marcó como finalizado, actualizar Google Calendar
+              const estadoNombre = tareaActualizada.estado?.nombre
+                ?.toLowerCase()
+                .replace(/_/g, " ");
+              if (
+                estadoNombre === "finalizado" &&
+                payload.old.estado_id !== payload.new.estado_id
+              ) {
+                if (debeSincronizarConCalendario(tareaActualizada.nombre)) {
+                  const calendarioKey = `estado-${tareaActualizada.id}`;
+                  if (!calendarioEnProgreso.current.has(calendarioKey)) {
+                    calendarioEnProgreso.current.add(calendarioKey);
+
+                    try {
+                      const response = await fetch(
+                        "/api/calendar/events/update",
+                        {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            taskId: tareaActualizada.id,
+                            title: `✅ [FINALIZADA] ${
+                              tareaActualizada.nombre || "Sin título"
+                            }`,
+                            completed: true,
+                          }),
+                        }
+                      );
+
+                      if (response.ok) {
+                        console.log(
+                          "✅ Tarea marcada como finalizada en calendario"
+                        );
+                      } else if (response.status === 404) {
+                        console.log("⚠️ Evento no encontrado en calendario");
+                      }
+                    } catch (calendarError) {
+                      console.warn(
+                        "Error actualizando estado en calendario:",
+                        calendarError
+                      );
+                    } finally {
+                      setTimeout(() => {
+                        calendarioEnProgreso.current.delete(calendarioKey);
+                      }, 1000);
+                    }
+                  }
+                }
+              }
             }
           } else if (payload.eventType === "DELETE") {
-            setTareas((prev) => prev.filter((t) => t.id !== payload.old.id));
+            setTareas((prev) => {
+              const newTareas = prev.filter((t) => t.id !== payload.old.id);
+
+              // ✅ IMPORTANTE: Notificar al padre que las tareas cambiaron
+              onTareasChange?.(newTareas);
+
+              return newTareas;
+            });
           }
         }
       )
@@ -135,21 +207,25 @@ export default function TareasTable({
           aVal = a.estado?.nombre?.toLowerCase() || "";
           bVal = b.estado?.nombre?.toLowerCase() || "";
           break;
-        case "empleado":
-          aVal = a.empleado_asignado?.nombre?.toLowerCase() || "";
-          bVal = b.empleado_asignado?.nombre?.toLowerCase() || "";
-          break;
-        case "created_at":
-          aVal = a.created_at || "";
-          bVal = b.created_at || "";
+        case "responsable":
+          aVal = a.empleados_responsables?.[0]?.nombre?.toLowerCase() || "";
+          bVal = b.empleados_responsables?.[0]?.nombre?.toLowerCase() || "";
           break;
         case "fecha_vencimiento":
           aVal = a.fecha_vencimiento || "";
           bVal = b.fecha_vencimiento || "";
           break;
-        case "observaciones":
-          aVal = a.observaciones?.toLowerCase() || "";
-          bVal = b.observaciones?.toLowerCase() || "";
+        case "importancia":
+          aVal = a.importancia?.toLowerCase() || "";
+          bVal = b.importancia?.toLowerCase() || "";
+          break;
+        case "urgencia":
+          aVal = a.urgencia?.toLowerCase() || "";
+          bVal = b.urgencia?.toLowerCase() || "";
+          break;
+        case "notas":
+          aVal = a.notas?.toLowerCase() || "";
+          bVal = b.notas?.toLowerCase() || "";
           break;
         default:
           return 0;
@@ -169,8 +245,8 @@ export default function TareasTable({
         supabase.from("procesos").select("id, nombre").order("nombre"),
         supabase
           .from("estados_tarea")
-          .select("id, nombre, color")
-          .order("nombre"),
+          .select("id, nombre, color, categoria")
+          .order("orden"),
         supabase
           .from("empleados")
           .select("id, nombre, apellido")
@@ -186,14 +262,34 @@ export default function TareasTable({
     }
   };
 
+  // Función para verificar si una tarea debe sincronizarse con Google Calendar
+  const debeSincronizarConCalendario = (nombreTarea) => {
+    if (!nombreTarea) return false;
+    const nombreUpper = nombreTarea.toUpperCase().trim();
+    const palabrasClave = [
+      "VENCIMIENTO",
+      "SEGUIMIENTO",
+      "AUDIENCIA",
+      "REUNION",
+      "REUNIÓN",
+    ];
+    return palabrasClave.some((palabra) => nombreUpper.startsWith(palabra));
+  };
+
   const actualizarCelda = async (tareaId, campo, valor) => {
     try {
-      // Actualizar localmente PRIMERO para UI instantánea
-      setTareas((prev) =>
-        prev.map((t) => (t.id === tareaId ? { ...t, [campo]: valor } : t))
-      );
+      // Guardar el valor anterior para revertir en caso de error
+      const tareaOriginal = tareas.find((t) => t.id === tareaId);
+      const valorAnterior = tareaOriginal?.[campo];
 
-      // Luego actualizar en base de datos
+      // Actualizar UI optimísticamente solo para campos simples
+      if (campo !== "estado_id" && campo !== "proceso_id") {
+        setTareas((prev) =>
+          prev.map((t) => (t.id === tareaId ? { ...t, [campo]: valor } : t))
+        );
+      }
+
+      // Actualizar en base de datos
       const { error } = await supabase
         .from("tareas")
         .update({ [campo]: valor })
@@ -203,6 +299,17 @@ export default function TareasTable({
 
       // Si se actualiza fecha_vencimiento, también actualizar Google Calendar
       if (campo === "fecha_vencimiento" && valor) {
+        const tarea = tareas.find((t) => t.id === tareaId);
+
+        // Solo sincronizar si la tarea empieza con palabras clave
+        if (!debeSincronizarConCalendario(tarea?.nombre)) {
+          console.log(
+            "⏭️ Tarea no requiere sincronización con calendario:",
+            tarea?.nombre
+          );
+          return;
+        }
+
         // Prevenir llamadas duplicadas simultáneas
         const calendarioKey = `fecha-${tareaId}`;
         if (calendarioEnProgreso.current.has(calendarioKey)) {
@@ -215,7 +322,6 @@ export default function TareasTable({
         calendarioEnProgreso.current.add(calendarioKey);
 
         try {
-          const tarea = tareas.find((t) => t.id === tareaId);
           // Crear fecha en hora local sin conversión de timezone
           const [year, month, day] = valor.split("-");
           const fechaVencimiento = new Date(
@@ -265,76 +371,11 @@ export default function TareasTable({
         }
       }
 
-      if (campo === "proceso_id" && valor) {
-        const proceso = procesos.find((p) => p.id === valor);
-        // Actualizar con el objeto completo del proceso
-        setTareas((prev) =>
-          prev.map((t) => (t.id === tareaId ? { ...t, proceso } : t))
-        );
-      } else if (campo === "estado_id" && valor) {
-        const estado = estados.find((e) => e.id === valor);
-        // Actualizar con el objeto completo del estado
-        setTareas((prev) =>
-          prev.map((t) => (t.id === tareaId ? { ...t, estado } : t))
-        );
-
-        // Si se marca como completada, actualizar evento en Google Calendar
-        if (estado?.nombre?.toLowerCase() === "completada") {
-          // Prevenir llamadas duplicadas simultáneas
-          const calendarioKey = `estado-${tareaId}`;
-          if (calendarioEnProgreso.current.has(calendarioKey)) {
-            console.log(
-              "⏳ Actualización de estado en calendario ya en progreso, omitiendo..."
-            );
-            return;
-          }
-
-          calendarioEnProgreso.current.add(calendarioKey);
-
-          try {
-            const tarea = tareas.find((t) => t.id === tareaId);
-            const response = await fetch("/api/calendar/events/update", {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                taskId: tareaId,
-                title: `✅ [TAREA TERMINADA] ${tarea?.nombre || "Sin título"}`,
-                completed: true,
-              }),
-            });
-
-            if (response.ok) {
-              console.log("✅ Tarea marcada como completada en calendario");
-            } else if (response.status === 404) {
-              console.log(
-                "⚠️ Evento no encontrado en calendario (ya fue eliminado o no existía)"
-              );
-            }
-          } catch (calendarError) {
-            console.warn(
-              "Error actualizando estado en calendario:",
-              calendarError
-            );
-          } finally {
-            // Limpiar el flag después de un pequeño delay
-            setTimeout(() => {
-              calendarioEnProgreso.current.delete(calendarioKey);
-            }, 1000);
-          }
-        }
-      } else if (campo === "empleado_asignado_id" && valor) {
-        const empleado = empleados.find((e) => e.id === valor);
-        // Actualizar con el objeto completo del empleado
-        setTareas((prev) =>
-          prev.map((t) =>
-            t.id === tareaId ? { ...t, empleado_asignado: empleado } : t
-          )
-        );
-      }
+      // El realtime subscription se encargará de actualizar proceso, estado y empleado con sus relaciones completas
     } catch (error) {
       console.error("Error actualizando:", error);
       // Revertir cambio local si falla
-      setTareas((prev) => [...prev]);
+      setTareas((prev) => [...initialTareas]);
     }
   };
 
@@ -381,7 +422,7 @@ export default function TareasTable({
       fecha_completada: null,
       tiempo_estimado: null,
       tiempo_real: null,
-      observaciones: "",
+      notas: "",
     });
   };
 
@@ -476,18 +517,18 @@ export default function TareasTable({
           <table className="w-full border-collapse">
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
-                <th className="px-2 py-2 text-center text-xs font-semibold text-gray-700 border-b w-10">
+                <th className="px-1 py-2 text-center text-xs font-semibold text-gray-700 border-b w-8">
                   <input
                     type="checkbox"
                     checked={
                       tareas.length > 0 && seleccionadas.size === tareas.length
                     }
                     onChange={toggleSeleccionarTodas}
-                    className="cursor-pointer"
+                    className="cursor-pointer w-4 h-4"
                   />
                 </th>
-                <th className="px-2 py-3 text-center text-xs font-semibold text-gray-700 border-b w-10">
-                  ⋮⋮
+                <th className="px-1 py-2 text-center text-xs font-semibold text-gray-700 border-b w-8">
+                  <GripVertical className="w-4 h-4 mx-auto text-gray-400" />
                 </th>
                 <ColumnHeader
                   label="Nombre"
@@ -501,26 +542,32 @@ export default function TareasTable({
                   </div>
                 </th>
                 <ColumnHeader
-                  label="Asignado"
-                  columnId="empleado"
+                  label="Responsable"
+                  columnId="responsable"
                   onSort={handleSort}
                   currentSort={sortConfig}
                 />
                 <ColumnHeader
-                  label="Fecha Creación"
-                  columnId="created_at"
-                  onSort={handleSort}
-                  currentSort={sortConfig}
-                />
-                <ColumnHeader
-                  label="Fecha Vencimiento"
+                  label="Vencimiento"
                   columnId="fecha_vencimiento"
                   onSort={handleSort}
                   currentSort={sortConfig}
                 />
                 <ColumnHeader
-                  label="Observaciones"
-                  columnId="observaciones"
+                  label="Importancia"
+                  columnId="importancia"
+                  onSort={handleSort}
+                  currentSort={sortConfig}
+                />
+                <ColumnHeader
+                  label="Urgencia"
+                  columnId="urgencia"
+                  onSort={handleSort}
+                  currentSort={sortConfig}
+                />
+                <ColumnHeader
+                  label="Notas"
+                  columnId="notas"
                   onSort={handleSort}
                   currentSort={sortConfig}
                 />
@@ -590,25 +637,31 @@ function SortableRow({
     opacity: isDragging ? 0.5 : 1,
   };
 
+  // Verificar si la tarea está finalizada
+  const estaFinalizada = tarea.estado?.nombre === "finalizado";
+
   return (
     <tr
       ref={setNodeRef}
       style={style}
-      className="border-b hover:bg-gray-50 group"
+      className={clsx(
+        "border-b hover:bg-gray-50 group",
+        estaFinalizada && "bg-green-50 opacity-75"
+      )}
     >
-      <td className="px-2 py-1.5 text-center">
+      <td className="px-1 py-1.5 text-center border-r">
         <input
           type="checkbox"
           checked={seleccionada}
           onChange={() => onToggleSeleccion(tarea.id)}
-          className="cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+          className="cursor-pointer w-4 h-4"
         />
       </td>
-      <td className="px-2 py-1.5 text-center">
+      <td className="px-1 py-1.5 text-center border-r">
         <div
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 flex items-center justify-center"
         >
           <GripVertical className="w-4 h-4" />
         </div>
@@ -617,6 +670,7 @@ function SortableRow({
       <TextCell
         value={tarea.nombre}
         onChange={(val) => actualizarCelda(tarea.id, "nombre", val)}
+        disabled={estaFinalizada}
         iconButton={
           <button
             onClick={() => onTareaClick?.(tarea)}
@@ -628,49 +682,82 @@ function SortableRow({
         }
       />
       {/* Estado */}
-      <SelectCell
-        value={tarea.estado?.nombre}
-        options={estados}
+      <EstadoCell
+        value={tarea.estado_id}
+        estadoActual={tarea.estado}
+        estados={estados}
         onChange={(id) => actualizarCelda(tarea.id, "estado_id", id)}
-        badge
-        color={tarea.estado?.color}
+        disabled={estaFinalizada}
         className="min-w-[120px]"
       />
-      {/* Asignado */}
+      {/* Responsable (editable) */}
       <SelectCell
         value={
-          tarea.empleado_asignado
-            ? `${tarea.empleado_asignado.nombre} ${tarea.empleado_asignado.apellido}`
-            : ""
+          tarea.empleados_responsables?.[0]?.empleado?.id ||
+          tarea.empleados_responsables?.[0]?.id
         }
         options={empleados.map((e) => ({
           id: e.id,
           nombre: `${e.nombre} ${e.apellido}`,
         }))}
-        onChange={(id) => actualizarCelda(tarea.id, "empleado_asignado_id", id)}
-        className="min-w-[150px]"
+        disabled={estaFinalizada}
+        onChange={async (empId) => {
+          try {
+            // Eliminar todos los responsables actuales
+            await supabase
+              .from("tareas_empleados_responsables")
+              .delete()
+              .eq("tarea_id", tarea.id);
+
+            // Insertar el nuevo responsable
+            if (empId) {
+              const { error } = await supabase
+                .from("tareas_empleados_responsables")
+                .insert({ tarea_id: tarea.id, empleado_id: empId });
+
+              if (error) throw error;
+            }
+
+            // Recargar tareas para ver cambios
+            onUpdate?.();
+          } catch (error) {
+            console.error("Error actualizando responsable:", error);
+            toast.error("Error al actualizar responsable");
+          }
+        }}
+        placeholder="Sin responsable"
       />
-      {/* Fecha Creación */}
-      <td className="px-3 py-1.5 border-r text-xs text-gray-600">
-        <div className="truncate">
-          {tarea.created_at
-            ? new Date(tarea.created_at).toLocaleDateString("es-ES", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-              })
-            : "-"}
-        </div>
-      </td>
       {/* Fecha Vencimiento */}
       <DateCell
         value={tarea.fecha_vencimiento}
         onChange={(val) => actualizarCelda(tarea.id, "fecha_vencimiento", val)}
+        disabled={estaFinalizada}
       />
-      {/* Observaciones */}
+      {/* Importancia */}
+      <BadgeCell
+        value={tarea.importancia}
+        options={[
+          { id: "importante", nombre: "Alta", color: "#EF4444" },
+          { id: "no importante", nombre: "Baja", color: "#10B981" },
+        ]}
+        disabled={estaFinalizada}
+        onChange={(val) => actualizarCelda(tarea.id, "importancia", val)}
+      />
+      {/* Urgencia */}
+      <BadgeCell
+        value={tarea.urgencia}
+        options={[
+          { id: "urgente", nombre: "Urgente", color: "#F59E0B" },
+          { id: "no urgente", nombre: "Normal", color: "#3B82F6" },
+        ]}
+        disabled={estaFinalizada}
+        onChange={(val) => actualizarCelda(tarea.id, "urgencia", val)}
+      />
+      {/* Notas */}
       <TextCell
-        value={tarea.observaciones}
-        onChange={(val) => actualizarCelda(tarea.id, "observaciones", val)}
+        value={tarea.notas}
+        onChange={(val) => actualizarCelda(tarea.id, "notas", val)}
+        disabled={estaFinalizada}
         className="min-w-[200px]"
       />
     </tr>
@@ -678,42 +765,45 @@ function SortableRow({
 }
 
 // Componente de celda de texto editable
-function TextCell({ value, onChange, className, iconButton }) {
+function TextCell({
+  value,
+  onChange,
+  className,
+  iconButton,
+  disabled = false,
+}) {
   const [editing, setEditing] = useState(false);
   const [currentValue, setCurrentValue] = useState(value || "");
-  const contentRef = useRef();
+  const inputRef = useRef();
 
   useEffect(() => {
     setCurrentValue(value || "");
   }, [value]);
 
   useEffect(() => {
-    if (editing && contentRef.current) {
-      contentRef.current.focus();
-
-      const handleKeyDown = (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          handleSave();
-        }
-        if (e.key === "Escape") {
-          e.preventDefault();
-          setCurrentValue(value || "");
-          setEditing(false);
-        }
-      };
-
-      contentRef.current.addEventListener("keydown", handleKeyDown);
-      return () => {
-        contentRef.current?.removeEventListener("keydown", handleKeyDown);
-      };
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
     }
-  }, [editing, value]);
+  }, [editing]);
 
   const handleSave = () => {
     setEditing(false);
-    if (currentValue.trim() !== value) {
-      onChange(currentValue.trim());
+    const trimmed = currentValue.trim();
+    if (trimmed !== (value || "").trim()) {
+      onChange(trimmed);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSave();
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setCurrentValue(value || "");
+      setEditing(false);
     }
   };
 
@@ -721,27 +811,42 @@ function TextCell({ value, onChange, className, iconButton }) {
     <td className={clsx("px-3 py-1.5 border-r group relative", className)}>
       <div className="flex items-center gap-2 min-w-[200px]">
         {iconButton}
-        <ContentEditable
-          innerRef={contentRef}
-          html={currentValue}
-          disabled={!editing}
-          onChange={(e) => setCurrentValue(e.target.value)}
-          onFocus={() => setEditing(true)}
-          onBlur={handleSave}
-          className={clsx(
-            "outline-none px-2 py-0.5 rounded transition-all text-xs flex-1",
-            editing
-              ? "bg-primary-50 ring-2 ring-primary-400"
-              : "hover:bg-gray-100 cursor-text"
-          )}
-        />
+        {editing ? (
+          <input
+            ref={inputRef}
+            type="text"
+            value={currentValue}
+            onChange={(e) => setCurrentValue(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={handleKeyDown}
+            className="flex-1 px-2 py-0.5 text-xs border-2 border-primary-400 rounded bg-primary-50 outline-none"
+          />
+        ) : (
+          <div
+            onClick={() => !disabled && setEditing(true)}
+            className={clsx(
+              "flex-1 px-2 py-0.5 text-xs rounded transition-colors min-h-[24px] flex items-center",
+              disabled
+                ? "cursor-not-allowed text-gray-500"
+                : "hover:bg-gray-100 cursor-text"
+            )}
+          >
+            {currentValue || <span className="text-gray-400">Vacío</span>}
+          </div>
+        )}
       </div>
     </td>
   );
 }
-
-// Componente de celda con dropdown
-function SelectCell({ value, options, onChange, badge, color, className }) {
+// Componente de celda con dropdown agrupado por categorías (para estados)
+function EstadoCell({
+  value,
+  estadoActual: estadoActualProp,
+  estados,
+  onChange,
+  className,
+  disabled = false,
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [referenceElement, setReferenceElement] = useState(null);
   const [popperElement, setPopperElement] = useState(null);
@@ -749,6 +854,24 @@ function SelectCell({ value, options, onChange, badge, color, className }) {
     placement: "bottom-start",
     strategy: "fixed",
   });
+
+  // Usar el estado de la prop si está disponible, sino buscar en la lista
+  const estadoActual = estadoActualProp || estados.find((e) => e.id === value);
+
+  // Agrupar estados por categoría
+  const estadosAgrupados = {
+    pendiente: estados.filter((e) => e.categoria === "pendiente"),
+    en_curso: estados.filter((e) => e.categoria === "en_curso"),
+    completado: estados.filter((e) => e.categoria === "completado"),
+    vacio: estados.filter((e) => e.categoria === "vacio"),
+  };
+
+  const categorias = [
+    { key: "pendiente", label: "Pendiente" },
+    { key: "en_curso", label: "En curso" },
+    { key: "completado", label: "Completado" },
+    { key: "vacio", label: "Vacío" },
+  ];
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -773,27 +896,31 @@ function SelectCell({ value, options, onChange, badge, color, className }) {
     <td className={clsx("px-3 py-1.5 border-r relative", className)}>
       <div
         ref={setReferenceElement}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
         className={clsx(
-          "min-h-6 px-2 py-0.5 rounded cursor-pointer transition-all",
-          isOpen
-            ? "bg-primary-50 ring-2 ring-primary-400"
-            : "hover:bg-gray-100",
-          badge && "inline-flex items-center"
+          "inline-flex items-center",
+          disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
         )}
       >
-        {badge && color ? (
+        {estadoActual ? (
           <span
-            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium truncate"
+            className={clsx(
+              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all",
+              !disabled && "hover:opacity-80"
+            )}
             style={{
-              backgroundColor: `${color}20`,
-              color: color,
+              backgroundColor: `${estadoActual.color}20`,
+              color: estadoActual.color,
             }}
           >
-            {value || "Seleccionar"}
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: estadoActual.color }}
+            />
+            {estadoActual.nombre.replace(/_/g, " ")}
           </span>
         ) : (
-          <span className="text-xs truncate">{value || "Seleccionar"}</span>
+          <span className="text-xs text-gray-400 px-2 py-1">Seleccionar</span>
         )}
       </div>
 
@@ -804,32 +931,44 @@ function SelectCell({ value, options, onChange, badge, color, className }) {
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-[9999] bg-white border border-gray-200 shadow-xl rounded-lg py-1 min-w-[200px] max-h-[300px] overflow-auto"
+            className="z-[9999] bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-[200px] max-h-[400px] overflow-y-auto"
           >
-            {options.map((option) => (
-              <button
-                key={option.id}
-                onClick={() => {
-                  onChange(option.id);
-                  setIsOpen(false);
-                }}
-                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors"
-              >
-                {badge && option.color ? (
-                  <span
-                    className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
-                    style={{
-                      backgroundColor: `${option.color}20`,
-                      color: option.color,
-                    }}
-                  >
-                    {option.nombre}
-                  </span>
-                ) : (
-                  option.nombre
-                )}
-              </button>
-            ))}
+            {categorias.map((categoria) => {
+              const estadosCategoria = estadosAgrupados[categoria.key];
+              if (estadosCategoria.length === 0) return null;
+
+              return (
+                <div key={categoria.key} className="mb-1 last:mb-0">
+                  <div className="px-3 py-0.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                    {categoria.label}
+                  </div>
+                  {estadosCategoria.map((estado) => (
+                    <button
+                      key={estado.id}
+                      onClick={() => {
+                        onChange(estado.id);
+                        setIsOpen(false);
+                      }}
+                      className="w-full px-3 py-1 text-left hover:bg-gray-50 transition-colors"
+                    >
+                      <span
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+                        style={{
+                          backgroundColor: `${estado.color}20`,
+                          color: estado.color,
+                        }}
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: estado.color }}
+                        />
+                        {estado.nombre.replace(/_/g, " ")}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
           </div>,
           document.body
         )}
@@ -837,8 +976,8 @@ function SelectCell({ value, options, onChange, badge, color, className }) {
   );
 }
 
-// Componente de prioridad
-function PrioridadCell({ value, onChange }) {
+// Componente de celda con badge selector (para Importancia/Urgencia)
+function BadgeCell({ value, options, onChange, className, disabled = false }) {
   const [isOpen, setIsOpen] = useState(false);
   const [referenceElement, setReferenceElement] = useState(null);
   const [popperElement, setPopperElement] = useState(null);
@@ -847,13 +986,7 @@ function PrioridadCell({ value, onChange }) {
     strategy: "fixed",
   });
 
-  const prioridades = [
-    { id: "alta", nombre: "Alta", color: "#EF4444" },
-    { id: "media", nombre: "Media", color: "#F59E0B" },
-    { id: "baja", nombre: "Baja", color: "#10B981" },
-  ];
-
-  const prioridadActual = prioridades.find((p) => p.id === value);
+  const opcionActual = options.find((opt) => opt.id === value);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -875,27 +1008,34 @@ function PrioridadCell({ value, onChange }) {
   }, [isOpen, popperElement, referenceElement]);
 
   return (
-    <td className="px-3 py-1.5 relative min-w-[100px]">
+    <td className={clsx("px-3 py-1.5 border-r relative", className)}>
       <div
         ref={setReferenceElement}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
         className={clsx(
-          "min-h-[24px] px-2 py-0.5 rounded cursor-pointer transition-all inline-flex items-center",
-          isOpen ? "bg-primary-50 ring-2 ring-primary-400" : "hover:bg-gray-100"
+          "inline-flex items-center",
+          disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
         )}
       >
-        {prioridadActual ? (
+        {opcionActual ? (
           <span
-            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+            className={clsx(
+              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all",
+              !disabled && "hover:opacity-80"
+            )}
             style={{
-              backgroundColor: `${prioridadActual.color}20`,
-              color: prioridadActual.color,
+              backgroundColor: `${opcionActual.color}20`,
+              color: opcionActual.color,
             }}
           >
-            {prioridadActual.nombre}
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: opcionActual.color }}
+            />
+            {opcionActual.nombre}
           </span>
         ) : (
-          <span className="text-sm text-gray-500">Seleccionar</span>
+          <span className="text-xs text-gray-400 px-2 py-1">Seleccionar</span>
         )}
       </div>
 
@@ -906,25 +1046,29 @@ function PrioridadCell({ value, onChange }) {
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-[9999] bg-white border border-gray-200 shadow-xl rounded-lg py-1 min-w-[150px]"
+            className="z-[9999] bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-[180px]"
           >
-            {prioridades.map((prioridad) => (
+            {options.map((option) => (
               <button
-                key={prioridad.id}
+                key={option.id}
                 onClick={() => {
-                  onChange(prioridad.id);
+                  onChange(option.id);
                   setIsOpen(false);
                 }}
-                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors"
+                className="w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors"
               >
                 <span
-                  className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
                   style={{
-                    backgroundColor: `${prioridad.color}20`,
-                    color: prioridad.color,
+                    backgroundColor: `${option.color}20`,
+                    color: option.color,
                   }}
                 >
-                  {prioridad.nombre}
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: option.color }}
+                  />
+                  {option.nombre}
                 </span>
               </button>
             ))}
@@ -936,7 +1080,7 @@ function PrioridadCell({ value, onChange }) {
 }
 
 // Componente de fecha
-function DateCell({ value, onChange }) {
+function DateCell({ value, onChange, disabled = false }) {
   const [editing, setEditing] = useState(false);
   const [currentValue, setCurrentValue] = useState(value || "");
 
@@ -967,7 +1111,7 @@ function DateCell({ value, onChange }) {
 
   return (
     <td className="px-3 py-1.5 border-r min-w-[120px]">
-      {editing ? (
+      {editing && !disabled ? (
         <input
           type="date"
           value={currentValue || ""}
@@ -977,8 +1121,7 @@ function DateCell({ value, onChange }) {
             if (e.key === "Enter") handleSave();
             if (e.key === "Escape") {
               setCurrentValue(value || "");
-              className =
-                "w-full px-2 py-0.5 text-xs border rounded bg-primary-50 ring-2 ring-primary-400 outline-none";
+              setEditing(false);
             }
           }}
           autoFocus
@@ -986,12 +1129,105 @@ function DateCell({ value, onChange }) {
         />
       ) : (
         <div
-          onClick={() => setEditing(true)}
-          className="min-h-6 px-2 py-0.5 rounded hover:bg-gray-100 cursor-pointer transition-all flex items-center text-xs"
+          onClick={() => !disabled && setEditing(true)}
+          className={clsx(
+            "min-h-6 px-2 py-0.5 rounded transition-all flex items-center text-xs",
+            disabled
+              ? "cursor-not-allowed text-gray-500"
+              : "hover:bg-gray-100 cursor-pointer"
+          )}
         >
           {value ? formatearFecha(value) : "Sin fecha"}
         </div>
       )}
+    </td>
+  );
+}
+
+// Componente de celda con select (para Responsables)
+function SelectCell({
+  value,
+  options,
+  onChange,
+  placeholder = "Seleccionar",
+  className,
+  disabled = false,
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [referenceElement, setReferenceElement] = useState(null);
+  const [popperElement, setPopperElement] = useState(null);
+  const { styles, attributes } = usePopper(referenceElement, popperElement, {
+    placement: "bottom-start",
+    strategy: "fixed",
+  });
+
+  const opcionSeleccionada = options.find((opt) => opt.id === value);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        popperElement &&
+        !popperElement.contains(e.target) &&
+        referenceElement &&
+        !referenceElement.contains(e.target)
+      ) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [isOpen, popperElement, referenceElement]);
+
+  return (
+    <td className={clsx("px-3 py-1.5 border-r relative", className)}>
+      <div
+        ref={setReferenceElement}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        className={clsx(
+          "min-h-6 px-2 py-0.5 rounded transition-all flex items-center text-xs truncate",
+          disabled
+            ? "cursor-not-allowed opacity-60 bg-gray-50"
+            : "hover:bg-gray-100 cursor-pointer"
+        )}
+      >
+        {opcionSeleccionada ? (
+          <span className="text-gray-900">{opcionSeleccionada.nombre}</span>
+        ) : (
+          <span className="text-gray-400">{placeholder}</span>
+        )}
+      </div>
+
+      {isOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={setPopperElement}
+            style={styles.popper}
+            {...attributes.popper}
+            className="z-[9999] bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-[200px] max-h-[300px] overflow-y-auto"
+          >
+            {options.map((option) => (
+              <button
+                key={option.id}
+                onClick={() => {
+                  onChange(option.id);
+                  setIsOpen(false);
+                }}
+                className={clsx(
+                  "w-full px-3 py-2 text-left text-xs hover:bg-gray-50 transition-colors",
+                  value === option.id && "bg-blue-50 font-medium"
+                )}
+              >
+                {option.nombre}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
     </td>
   );
 }

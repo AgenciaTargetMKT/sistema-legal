@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
 import {
   LayoutDashboard,
   Scale,
@@ -15,6 +16,7 @@ import {
   LogOut,
   Menu,
   X,
+  Calendar,
 } from "lucide-react";
 
 const menuItems = [
@@ -22,6 +24,11 @@ const menuItems = [
     name: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
+  },
+  {
+    name: "Calendario",
+    href: "/calendario",
+    icon: Calendar,
   },
   {
     name: "Procesos",
@@ -54,18 +61,34 @@ const menuItems = [
 const SidebarComponent = ({ empleado, onSignOut, isOpen, onClose }) => {
   const pathname = usePathname();
 
-  const displayName = empleado
-    ? `${empleado.nombre} ${empleado.apellido}`
-    : "Usuario";
-  const displayRole = empleado?.rol?.nombre || "Cargando...";
   const displayInitial =
     empleado?.nombre?.[0] || empleado?.email?.[0]?.toUpperCase() || "U";
+
+  const containerVariants = {
+    hidden: { opacity: 0, x: -20 },
+    visible: {
+      opacity: 1,
+      x: 0,
+      transition: {
+        duration: 0.3,
+        staggerChildren: 0.05,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, x: -10 },
+    visible: { opacity: 1, x: 0 },
+  };
 
   return (
     <>
       {/* Overlay para móvil */}
       {isOpen && (
-        <div
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
           onClick={onClose}
         />
@@ -74,87 +97,104 @@ const SidebarComponent = ({ empleado, onSignOut, isOpen, onClose }) => {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:m-4 lg:my-4 lg:ml-4 lg:mr-0 lg:h-[calc(100vh-2rem)] lg:rounded-xl lg:shadow-lg",
+          "fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:m-4 lg:my-4 lg:ml-4 lg:mr-0 lg:h-[calc(100vh-2rem)] lg:rounded-2xl lg:shadow-xl",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex flex-col h-full bg-white/80 backdrop-blur-md lg:rounded-xl border">
+        <div className="flex flex-col h-full bg-white/95 backdrop-blur-xl lg:rounded-2xl border border-gray-200/50">
           {/* Logo y botón cerrar */}
-          <div className="flex items-center justify-between h-16 px-4 border-b">
-            <div className="flex items-center space-x-2">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <Scale className="h-5 w-5" />
-              </div>
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="flex items-center justify-between h-20 px-6 border-b border-gray-100"
+          >
+            <div className="flex items-center space-x-3">
+              <motion.div
+                whileHover={{ scale: 1.05, rotate: 5 }}
+                transition={{ type: "spring", stiffness: 400 }}
+                className="flex h-11 w-11 items-center justify-center rounded-xl bg-linear-to-br from-blue-500 to-blue-600 text-white shadow-lg"
+              >
+                <Scale className="h-6 w-6" />
+              </motion.div>
               <div>
-                <h1 className="text-lg font-bold">Sistema Legal</h1>
-                <p className="text-xs text-muted-foreground">Gestión Legal</p>
+                <h1 className="text-lg font-bold text-gray-900">
+                  Sistema Legal
+                </h1>
+                <p className="text-xs text-gray-500 font-medium">
+                  Gestión Legal
+                </p>
               </div>
             </div>
             <Button
               variant="ghost"
               size="icon"
               onClick={onClose}
-              className="lg:hidden"
+              className="lg:hidden hover:bg-gray-100 rounded-xl"
             >
               <X className="h-5 w-5" />
             </Button>
-          </div>
+          </motion.div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-3 py-4 space-y-1  overflow-y-auto">
-            {menuItems.map((item) => {
+          <motion.nav
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="flex-1 px-4 py-6 space-y-2 overflow-y-auto"
+          >
+            {menuItems.map((item, index) => {
               const isActive = pathname === item.href;
               const Icon = item.icon;
 
               return (
-                <Link
+                <motion.div
                   key={item.name}
-                  href={item.href}
-                  onClick={onClose}
-                  prefetch={false}
-                  scroll={false}
+                  variants={itemVariants}
+                  whileHover={{ x: 4 }}
+                  transition={{ type: "spring", stiffness: 300 }}
                 >
-                  <Button
-                    variant={isActive ? "secondary" : "ghost"}
-                    className={cn(
-                      "w-full justify-start",
-                      isActive &&
-                        "bg-primary/10 text-primary hover:bg-primary/20"
-                    )}
+                  <Link
+                    href={item.href}
+                    onClick={onClose}
+                    prefetch={false}
+                    scroll={false}
                   >
-                    <Icon className="mr-3 h-5 w-5" />
-                    {item.name}
-                  </Button>
-                </Link>
+                    <Button
+                      variant={isActive ? "secondary" : "ghost"}
+                      className={cn(
+                        "w-full justify-start h-12 px-4 rounded-xl transition-all text-base",
+                        isActive &&
+                          "bg-linear-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/30"
+                      )}
+                    >
+                      <Icon className="mr-3 h-5 w-5" />
+                      <span className="font-medium">{item.name}</span>
+                    </Button>
+                  </Link>
+                </motion.div>
               );
             })}
-          </nav>
+          </motion.nav>
 
           {/* User info */}
-          <div className="p-4 border-t">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center flex-1 min-w-0">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold">
-                  {displayInitial}
-                </div>
-                <div className="ml-3 flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{displayName}</p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {displayRole}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <Button
-              variant="outline"
-              className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={onSignOut}
-            >
-              <LogOut className="mr-3 h-4 w-4" />
-              Cerrar Sesión
-            </Button>
-          </div>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.4 }}
+            className="p-5 border-t border-gray-100 bg-gray-50/50"
+          >
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <Button
+                variant="outline"
+                className="w-full justify-center h-12 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 rounded-xl font-medium text-base shadow-sm"
+                onClick={onSignOut}
+              >
+                <LogOut className="mr-2 h-5 w-5" />
+                Cerrar Sesión
+              </Button>
+            </motion.div>
+          </motion.div>
         </div>
       </aside>
     </>
