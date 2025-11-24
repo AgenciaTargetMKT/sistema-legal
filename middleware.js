@@ -36,7 +36,6 @@ export async function middleware(req) {
     data: { session },
   } = await supabase.auth.getSession();
 
-
   // Rutas protegidas
   const protectedRoutes = [
     "/dashboard",
@@ -55,12 +54,14 @@ export async function middleware(req) {
 
   // Si el usuario no está autenticado y trata de acceder a rutas protegidas
   if (!session && isProtectedRoute) {
-
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
   // Si el usuario está autenticado y trata de acceder al login o a la raíz
-  if (session && (req.nextUrl.pathname === "/login" || req.nextUrl.pathname === "/")) {
+  if (
+    session &&
+    (req.nextUrl.pathname === "/login" || req.nextUrl.pathname === "/")
+  ) {
     return NextResponse.redirect(new URL("/home", req.url));
   }
 

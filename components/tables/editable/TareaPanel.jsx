@@ -1376,69 +1376,70 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                     compact
                   />
 
-                  {/* Selector de tipo de evento - SIEMPRE mostrar si hay fecha Y si sincroniza */}
+                  {/* Selector de tipo de evento - SIEMPRE mostrar si hay fecha */}
                   {datosActuales?.fecha_vencimiento && (
                     <div className="space-y-2">
-                      {debeSincronizarConCalendario(datosActuales?.nombre) ? (
-                        <div className="flex flex-col gap-2 p-2 bg-primary-50 rounded-lg border border-primary-200">
-                          <div className="flex items-center justify-between">
-                            <button
-                              onClick={() => setEsTodoElDia(!esTodoElDia)}
-                              className="flex items-center gap-2 text-xs text-gray-700 hover:text-primary-600 transition-colors"
+                      <div className="flex flex-col gap-2 p-2 bg-primary-50 rounded-lg border border-primary-200">
+                        <div className="flex items-center justify-between">
+                          <button
+                            onClick={() => setEsTodoElDia(!esTodoElDia)}
+                            className="flex items-center gap-2 text-xs text-gray-700 hover:text-primary-600 transition-colors"
+                          >
+                            <div
+                              className={clsx(
+                                "w-4 h-4 rounded border-2 flex items-center justify-center transition-colors",
+                                esTodoElDia
+                                  ? "bg-primary-600 border-primary-600"
+                                  : "border-gray-300"
+                              )}
                             >
-                              <div
-                                className={clsx(
-                                  "w-4 h-4 rounded border-2 flex items-center justify-center transition-colors",
-                                  esTodoElDia
-                                    ? "bg-primary-600 border-primary-600"
-                                    : "border-gray-300"
-                                )}
-                              >
-                                {esTodoElDia && (
-                                  <svg
-                                    className="w-3 h-3 text-white"
-                                    fill="currentColor"
-                                    viewBox="0 0 20 20"
-                                  >
-                                    <path
-                                      fillRule="evenodd"
-                                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                                      clipRule="evenodd"
-                                    />
-                                  </svg>
-                                )}
-                              </div>
-                              <span className="font-semibold">Todo el día</span>
-                            </button>
+                              {esTodoElDia && (
+                                <svg
+                                  className="w-3 h-3 text-white"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              )}
+                            </div>
+                            <span className="font-semibold">Todo el día</span>
+                          </button>
+                          {debeSincronizarConCalendario(datosActuales?.nombre) && (
                             <span className="text-[10px] text-primary-600 font-medium">
                               📅 Se sincronizará con Google Calendar
                             </span>
-                          </div>
-
-                          {!esTodoElDia && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-600 font-medium">
-                                Horario:
-                              </span>
-                              <input
-                                type="time"
-                                value={horaInicio}
-                                onChange={(e) => setHoraInicio(e.target.value)}
-                                className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none"
-                              />
-                              <span className="text-xs text-gray-500 font-medium">
-                                a
-                              </span>
-                              <input
-                                type="time"
-                                value={horaFin}
-                                onChange={(e) => setHoraFin(e.target.value)}
-                                className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none"
-                              />
-                            </div>
                           )}
                         </div>
-                      ) : (
+
+                        {/* SIEMPRE mostrar selectores de hora */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-600 font-medium">
+                            Horario:
+                          </span>
+                          <input
+                            type="time"
+                            value={horaInicio}
+                            onChange={(e) => setHoraInicio(e.target.value)}
+                            className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none"
+                          />
+                          <span className="text-xs text-gray-500 font-medium">
+                            a
+                          </span>
+                          <input
+                            type="time"
+                            value={horaFin}
+                            onChange={(e) => setHoraFin(e.target.value)}
+                            className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none"
+                          />
+                        </div>
+                      </div>
+                      
+                      {!debeSincronizarConCalendario(datosActuales?.nombre) && (
                         <div className="text-[10px] text-gray-500 italic">
                           💡 Para sincronizar con Google Calendar, el nombre
                           debe empezar con: VENCIMIENTO, AUDIENCIA, REUNIÓN o
