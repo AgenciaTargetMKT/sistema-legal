@@ -1409,7 +1409,9 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                             </div>
                             <span className="font-semibold">Todo el día</span>
                           </button>
-                          {debeSincronizarConCalendario(datosActuales?.nombre) && (
+                          {debeSincronizarConCalendario(
+                            datosActuales?.nombre
+                          ) && (
                             <span className="text-[10px] text-primary-600 font-medium">
                               📅 Se sincronizará con Google Calendar
                             </span>
@@ -1438,7 +1440,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                           />
                         </div>
                       </div>
-                      
+
                       {!debeSincronizarConCalendario(datosActuales?.nombre) && (
                         <div className="text-[10px] text-gray-500 italic">
                           💡 Para sincronizar con Google Calendar, el nombre
