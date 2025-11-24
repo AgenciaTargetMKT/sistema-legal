@@ -43,6 +43,9 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
   const [horaInicio, setHoraInicio] = useState("09:00");
   const [horaFin, setHoraFin] = useState("10:00");
 
+  // Estado para prefijo de tipo de tarea (VENCIMIENTO, AUDIENCIA, etc.)
+  const [prefijoTarea, setPrefijoTarea] = useState("");
+
   // Sincronizar tareaLocal con tarea cuando cambia
   useEffect(() => {
     if (tarea?.id) {
@@ -97,6 +100,12 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
       setTituloLocal("");
       valorAnteriorTitulo.current = "";
       setTareaLocal(null);
+      setPrefijoTarea(""); // Resetear prefijo al cerrar
+    }
+
+    // Resetear prefijo cuando se abre para nueva tarea
+    if (isOpen && !tarea?.id) {
+      setPrefijoTarea("");
     }
   }, [isOpen, tarea?.id]); // Solo escuchar cambios en isOpen y tarea?.id
 
@@ -105,6 +114,20 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
     if (isOpen && tarea?.id && tarea?.nombre !== tituloLocal) {
       setTituloLocal(tarea.nombre || "");
       valorAnteriorTitulo.current = tarea.nombre || "";
+
+      // Detectar el prefijo del título existente
+      const nombre = tarea.nombre || "";
+      if (nombre.startsWith("VENCIMIENTO:")) {
+        setPrefijoTarea("VENCIMIENTO");
+      } else if (nombre.startsWith("AUDIENCIA:")) {
+        setPrefijoTarea("AUDIENCIA");
+      } else if (nombre.startsWith("REUNIÓN:")) {
+        setPrefijoTarea("REUNIÓN");
+      } else if (nombre.startsWith("SEGUIMIENTO:")) {
+        setPrefijoTarea("SEGUIMIENTO");
+      } else {
+        setPrefijoTarea("");
+      }
     }
   }, [tarea?.nombre, isOpen, tarea?.id]);
 
@@ -580,7 +603,6 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
       if (campo === "fecha_vencimiento" && valor) {
         // Solo sincronizar si la tarea empieza con palabras clave
         if (!debeSincronizarConCalendario(tarea.nombre)) {
-        
         } else {
           const calendarioKey = `fecha-${tarea.id}`;
           if (!calendarioEnProgreso.current.has(calendarioKey)) {
@@ -652,9 +674,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
               });
 
               if (response.ok) {
-              
               } else if (response.status === 404) {
-               
                 await fetch("/api/calendar/events/create", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -718,7 +738,6 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
   const guardarNuevaTarea = async () => {
     // Prevenir doble guardado
     if (loading) {
-    
       return;
     }
 
@@ -835,7 +854,6 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
       if (data && nuevaTarea.fecha_vencimiento) {
         // Solo sincronizar si la tarea empieza con palabras clave
         if (!debeSincronizarConCalendario(nuevaTarea.nombre)) {
-        
           toast.success("Tarea creada exitosamente");
         } else {
           try {
@@ -871,12 +889,10 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
               );
             }
             // Preparar datos para Google Calendar
-         
 
             const responsableStr =
               empleadosParaCalendar.empleados_responsables
                 ?.map((e) => {
-                
                   return e.nombre || e.apellido || e.nombre_completo || "";
                 })
                 .filter(Boolean)
@@ -884,7 +900,6 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
             const designadoStr =
               empleadosParaCalendar.empleados_designados
                 ?.map((e) => {
-                 
                   return e.nombre || e.apellido || e.nombre_completo || "";
                 })
                 .filter(Boolean)
@@ -923,7 +938,6 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                 }`
               );
             } else {
-            
               toast.success("Tarea y evento creados exitosamente");
             }
           } catch (calError) {
@@ -1001,26 +1015,67 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
             {/* Header minimalista */}
             <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-[10000]">
               <div className="flex-1 min-w-0 mr-4">
-                <input
-                  type="text"
-                  value={tituloLocal}
-                  onChange={(e) => setTituloLocal(e.target.value)}
-                  onBlur={guardarTitulo}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      e.target.blur(); // Esto dispara el guardarTitulo
-                    }
-                  }}
-                  placeholder="Título de la tarea..."
-                  className={clsx(
-                    "text-xl font-semibold text-gray-900 bg-transparent outline-none w-full rounded px-2 transition-colors",
-                    !tarea?.id
-                      ? "border-b-2 border-primary-400 focus:border-primary-600"
-                      : "border-b border-transparent hover:border-gray-300 focus:border-primary-400"
-                  )}
-                  autoFocus={!tarea?.id}
-                />
+                <div className="flex items-center gap-2">
+                  {/* Selector de prefijo para sincronización con Google Calendar */}
+                  <select
+                    value={prefijoTarea}
+                    onChange={(e) => {
+                      const nuevoPrefijo = e.target.value;
+                      setPrefijoTarea(nuevoPrefijo);
+
+                      // Actualizar el título local para agregar/remover el prefijo
+                      if (nuevoPrefijo) {
+                        // Remover cualquier prefijo existente primero
+                        let tituloSinPrefijo = tituloLocal
+                          .replace(
+                            /^(VENCIMIENTO|AUDIENCIA|REUNIÓN|SEGUIMIENTO):\s*/i,
+                            ""
+                          )
+                          .trim();
+
+                        // Agregar el nuevo prefijo
+                        setTituloLocal(`${nuevoPrefijo}: ${tituloSinPrefijo}`);
+                      } else {
+                        // Remover prefijo si se selecciona "Sin prefijo"
+                        const tituloSinPrefijo = tituloLocal
+                          .replace(
+                            /^(VENCIMIENTO|AUDIENCIA|REUNIÓN|SEGUIMIENTO):\s*/i,
+                            ""
+                          )
+                          .trim();
+                        setTituloLocal(tituloSinPrefijo);
+                      }
+                    }}
+                    className="px-3 py-1.5 text-sm font-medium border-2 border-gray-300 rounded-xl focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none transition-all bg-white hover:border-primary-400 cursor-pointer"
+                  >
+                    <option value="">Sin prefijo</option>
+                    <option value="VENCIMIENTO">📅 VENCIMIENTO</option>
+                    <option value="AUDIENCIA">⚖️ AUDIENCIA</option>
+                    <option value="REUNIÓN">👥 REUNIÓN</option>
+                    <option value="SEGUIMIENTO">📋 SEGUIMIENTO</option>
+                  </select>
+
+                  <input
+                    type="text"
+                    value={tituloLocal}
+                    onChange={(e) => setTituloLocal(e.target.value)}
+                    onBlur={guardarTitulo}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        e.target.blur(); // Esto dispara el guardarTitulo
+                      }
+                    }}
+                    placeholder="Título de la tarea..."
+                    className={clsx(
+                      "text-xl font-semibold text-gray-900 bg-transparent outline-none w-full rounded px-2 transition-colors",
+                      !tarea?.id
+                        ? "border-b-2 border-primary-400 focus:border-primary-600"
+                        : "border-b border-transparent hover:border-gray-300 focus:border-primary-400"
+                    )}
+                    autoFocus={!tarea?.id}
+                  />
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 {!tarea?.id && (
@@ -1028,7 +1083,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                     onClick={guardarNuevaTarea}
                     disabled={loading}
                     className={clsx(
-                      "px-4 py-1.5 text-white text-sm font-medium rounded transition-colors flex items-center gap-2",
+                      "px-4 py-1.5 text-white text-sm font-medium rounded-xl transition-colors flex items-center gap-2",
                       loading
                         ? "bg-gray-400 cursor-not-allowed"
                         : "bg-primary-600 hover:bg-primary-700"
@@ -1325,7 +1380,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                   {datosActuales?.fecha_vencimiento && (
                     <div className="space-y-2">
                       {debeSincronizarConCalendario(datosActuales?.nombre) ? (
-                        <div className="flex flex-col gap-2 p-2 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="flex flex-col gap-2 p-2 bg-primary-50 rounded-lg border border-primary-200">
                           <div className="flex items-center justify-between">
                             <button
                               onClick={() => setEsTodoElDia(!esTodoElDia)}
@@ -1355,7 +1410,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                               </div>
                               <span className="font-semibold">Todo el día</span>
                             </button>
-                            <span className="text-[10px] text-blue-600 font-medium">
+                            <span className="text-[10px] text-primary-600 font-medium">
                               📅 Se sincronizará con Google Calendar
                             </span>
                           </div>
@@ -1547,7 +1602,7 @@ function EstadoSelectGrouped({ value, estados, onUpdate }) {
                       onClick={() => handleSelect(estado.id)}
                       className={clsx(
                         "w-full px-2 py-1.5 text-left hover:bg-gray-50 transition-colors",
-                        value === estado.id && "bg-blue-50"
+                        value === estado.id && "bg-primary-50"
                       )}
                     >
                       <span
@@ -1643,7 +1698,7 @@ function BadgeSelector({ value, options, onUpdate }) {
                 onClick={() => handleSelect(option.id)}
                 className={clsx(
                   "w-full px-2 py-1.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-2",
-                  value === option.id && "bg-blue-50"
+                  value === option.id && "bg-primary-50"
                 )}
               >
                 <span
@@ -2110,7 +2165,6 @@ function EmpleadosBadgeSelector({ value, options, onUpdate, placeholder }) {
   const handleToggleEmpleado = (empleado) => {
     // Prevenir múltiples llamadas simultáneas
     if (updateInProgress.current) {
-     
       return;
     }
 
@@ -2210,7 +2264,6 @@ function EmpleadosBadgeSelector({ value, options, onUpdate, placeholder }) {
             const uniqueKey = empleadoId || `emp-${index}-${empleadoNombre}`;
             const primerNombre = empleadoNombre.split(" ")[0];
 
-
             return (
               <span
                 key={uniqueKey}
@@ -2259,7 +2312,7 @@ function EmpleadosBadgeSelector({ value, options, onUpdate, placeholder }) {
                   onClick={() => handleToggleEmpleado(empleado)}
                   className={clsx(
                     "w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-3",
-                    isSelected && "bg-blue-50"
+                    isSelected && "bg-primary-50"
                   )}
                 >
                   <div

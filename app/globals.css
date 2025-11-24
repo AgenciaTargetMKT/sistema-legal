@@ -67,9 +67,9 @@
   --popover: oklch(1 0 0);                     /* Popovers blancos */
   --popover-foreground: oklch(0.20 0.01 220); /* Texto en popovers */
   
-  /* COLOR PRIMARIO #0091FF */
-  --primary: oklch(0.62 0.20 230);            /* #0091FF - Azul principal */
-  --primary-foreground: oklch(1 0 0);         /* Blanco sobre azul */
+  /* COLOR PRIMARIO blue-500 #3B82F6 */
+  --primary: 217.2 91.2% 59.8%;              /* #3B82F6 - Azul principal (blue-500) */
+  --primary-foreground: 0 0% 100%;           /* Blanco sobre azul */
   
   /* Secundario - Azul más claro para acentos suaves */
   --secondary: oklch(0.95 0.01 230);          /* Azul muy claro #e6f7ff */
@@ -119,9 +119,9 @@
   --popover: oklch(0.20 0.01 240);            /* Popovers oscuros */
   --popover-foreground: oklch(0.95 0.005 240); /* Texto claro */
   
-  /* PRIMARY sigue siendo #0091FF */
-  --primary: oklch(0.62 0.20 230);            /* Azul primario */
-  --primary-foreground: oklch(1 0 0);         /* Blanco */
+  /* PRIMARY blue-500 #3B82F6 */
+  --primary: 217.2 91.2% 59.8%;              /* Azul primario (blue-500) */
+  --primary-foreground: 0 0% 100%;           /* Blanco */
   
   --secondary: oklch(0.25 0.05 230);          /* Azul muy oscuro */
   --secondary-foreground: oklch(0.80 0.15 230); /* Azul claro */

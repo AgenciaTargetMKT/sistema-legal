@@ -87,7 +87,6 @@ export default function TareasTable({
               .single();
 
             if (nuevaTarea) {
-      
               setTareas((prev) => {
                 const newTareas = [...prev, nuevaTarea];
                 // Notificar al padre después del render
@@ -438,25 +437,40 @@ export default function TareasTable({
   };
 
   const toggleSeleccionarTodas = () => {
-    if (seleccionadas.size === tareas.length) {
+    // Filtrar tareas finalizadas
+    const tareasSeleccionables = tareas.filter(
+      (t) => t.estado?.categoria !== "completado"
+    );
+
+    if (seleccionadas.size === tareasSeleccionables.length) {
       setSeleccionadas(new Set());
     } else {
-      setSeleccionadas(new Set(tareas.map((t) => t.id)));
+      setSeleccionadas(new Set(tareasSeleccionables.map((t) => t.id)));
     }
   };
 
   const eliminarSeleccionadas = async () => {
     if (seleccionadas.size === 0) return;
 
+    // Filtrar tareas finalizadas - no se pueden eliminar
+    const tareasAEliminar = tareas.filter(
+      (t) => seleccionadas.has(t.id) && t.estado?.categoria !== "completado"
+    );
+
+    if (tareasAEliminar.length === 0) {
+      toast.error("No se pueden eliminar tareas finalizadas");
+      return;
+    }
+
     const mensaje =
-      seleccionadas.size === 1
+      tareasAEliminar.length === 1
         ? "¿Eliminar 1 tarea seleccionada?"
-        : `¿Eliminar ${seleccionadas.size} tareas seleccionadas?`;
+        : `¿Eliminar ${tareasAEliminar.length} tareas seleccionadas?`;
 
     if (!confirm(mensaje)) return;
 
     try {
-      const tareasIds = Array.from(seleccionadas);
+      const tareasIds = tareasAEliminar.map((t) => t.id);
 
       // Eliminar eventos de Google Calendar para cada tarea
       for (const tareaId of tareasIds) {
@@ -483,6 +497,7 @@ export default function TareasTable({
       if (error) throw error;
 
       setSeleccionadas(new Set());
+      toast.success(`${tareasIds.length} tarea(s) eliminada(s) exitosamente`);
       onUpdate?.();
     } catch (error) {
       console.error("Error eliminando tareas:", error);
@@ -520,7 +535,13 @@ export default function TareasTable({
                   <input
                     type="checkbox"
                     checked={
-                      tareas.length > 0 && seleccionadas.size === tareas.length
+                      tareas.length > 0 &&
+                      seleccionadas.size ===
+                        tareas.filter(
+                          (t) => t.estado?.categoria !== "completado"
+                        ).length &&
+                      tareas.filter((t) => t.estado?.categoria !== "completado")
+                        .length > 0
                     }
                     onChange={toggleSeleccionarTodas}
                     className="cursor-pointer w-4 h-4"
@@ -637,7 +658,7 @@ function SortableRow({
   };
 
   // Verificar si la tarea está finalizada
-  const estaFinalizada = tarea.estado?.nombre === "finalizado";
+  const estaFinalizada = tarea.estado?.categoria === "completado";
 
   return (
     <tr
@@ -653,14 +674,23 @@ function SortableRow({
           type="checkbox"
           checked={seleccionada}
           onChange={() => onToggleSeleccion(tarea.id)}
-          className="cursor-pointer w-4 h-4"
+          disabled={estaFinalizada}
+          className={clsx(
+            "w-4 h-4",
+            estaFinalizada ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+          )}
         />
       </td>
       <td className="px-1 py-1.5 text-center border-r">
         <div
-          {...attributes}
-          {...listeners}
-          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 flex items-center justify-center"
+          {...(estaFinalizada ? {} : attributes)}
+          {...(estaFinalizada ? {} : listeners)}
+          className={clsx(
+            "flex items-center justify-center",
+            estaFinalizada
+              ? "cursor-not-allowed text-gray-300"
+              : "cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
+          )}
         >
           <GripVertical className="w-4 h-4" />
         </div>
