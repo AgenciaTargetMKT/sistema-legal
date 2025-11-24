@@ -25,6 +25,13 @@ export default function DashboardLayout({ children }) {
     }
   }, [initialized, initialize]);
 
+  // Verificar autenticación después de inicializar
+  useEffect(() => {
+    if (initialized && !loading && !user) {
+      router.push("/login");
+    }
+  }, [initialized, loading, user, router]);
+
   const handleSignOut = useCallback(async () => {
     await signOut();
     window.location.href = "/login";

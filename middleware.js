@@ -40,11 +40,13 @@ export async function middleware(req) {
   // Rutas protegidas
   const protectedRoutes = [
     "/dashboard",
+    "/home",
     "/procesos",
     "/clientes",
     "/empleados",
     "/tareas",
     "/impulsos",
+    "/calendario",
   ];
 
   const isProtectedRoute = protectedRoutes.some((route) =>
@@ -57,10 +59,14 @@ export async function middleware(req) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  // Si el usuario está autenticado y trata de acceder al login
-  if (session && req.nextUrl.pathname === "/login") {
-  
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+  // Si el usuario está autenticado y trata de acceder al login o a la raíz
+  if (session && (req.nextUrl.pathname === "/login" || req.nextUrl.pathname === "/")) {
+    return NextResponse.redirect(new URL("/home", req.url));
+  }
+
+  // Si el usuario no está autenticado y está en la raíz
+  if (!session && req.nextUrl.pathname === "/") {
+    return NextResponse.redirect(new URL("/login", req.url));
   }
 
   return response;
@@ -68,12 +74,15 @@ export async function middleware(req) {
 
 export const config = {
   matcher: [
+    "/",
     "/dashboard/:path*",
+    "/home/:path*",
     "/procesos/:path*",
     "/clientes/:path*",
     "/empleados/:path*",
     "/tareas/:path*",
     "/impulsos/:path*",
+    "/calendario/:path*",
     "/login",
   ],
 };

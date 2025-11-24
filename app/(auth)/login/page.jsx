@@ -41,20 +41,8 @@ export default function LoginPage() {
       }
 
       if (data?.session) {
-      
-
-        // Esperar un momento para que las cookies se sincronicen
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        router.push("/dashboard");
-
-        // Backup: si no redirige en 2 segundos, forzar con window.location
-        setTimeout(() => {
-          if (window.location.pathname === "/login") {
-        
-            window.location.href = "/dashboard";
-          }
-        }, 2000);
+        // Redirigir al home
+        window.location.href = "/home";
       } else {
         setError("No se pudo establecer la sesión");
         setLoading(false);
