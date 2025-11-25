@@ -1,0 +1,101 @@
+/* Estilos personalizados para BlockNote Editor */
+
+/* Contenedor del editor */
+.blocknote-editor-wrapper {
+  min-height: 400px;
+  background: white;
+}
+
+/* Ajustar el tamaño del editor */
+.blocknote-editor-wrapper .bn-container {
+  min-height: 400px;
+}
+
+/* Personalizar los bloques */
+.blocknote-editor-wrapper .bn-block-outer {
+  margin: 2px 0;
+}
+
+/* Mejorar el estilo de los menús */
+.blocknote-editor-wrapper .bn-menu {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  border-radius: 0.5rem;
+}
+
+/* Personalizar el toolbar */
+.blocknote-editor-wrapper .bn-toolbar {
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Estilo para el drag handle */
+.blocknote-editor-wrapper .bn-drag-handle {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.blocknote-editor-wrapper .bn-block-outer:hover .bn-drag-handle {
+  opacity: 1;
+}
+
+/* Mejorar el focus del editor */
+.blocknote-editor-wrapper .bn-editor:focus {
+  outline: none;
+}
+
+/* Personalizar los enlaces */
+.blocknote-editor-wrapper a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.blocknote-editor-wrapper a:hover {
+  color: #1d4ed8;
+}
+
+/* Personalizar las imágenes */
+.blocknote-editor-wrapper img {
+  border-radius: 0.5rem;
+  max-width: 100%;
+  height: auto;
+}
+
+/* Personalizar los bloques de código */
+.blocknote-editor-wrapper pre {
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+}
+
+/* Personalizar las listas */
+.blocknote-editor-wrapper ul,
+.blocknote-editor-wrapper ol {
+  padding-left: 1.5rem;
+}
+
+/* Personalizar las citas */
+.blocknote-editor-wrapper blockquote {
+  border-left: 4px solid #3b82f6;
+  padding-left: 1rem;
+  color: #64748b;
+  font-style: italic;
+}
+
+/* Mejorar el placeholder */
+.blocknote-editor-wrapper .bn-block-content[data-placeholder]::before {
+  color: #94a3b8;
+}
+
+/* Responsive: ajustar en pantallas pequeñas */
+@media (max-width: 640px) {
+  .blocknote-editor-wrapper {
+    min-height: 300px;
+  }
+  
+  .blocknote-editor-wrapper .bn-container {
+    min-height: 300px;
+  }
+}

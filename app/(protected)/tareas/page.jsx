@@ -6,8 +6,10 @@ import { formatearFecha, estaVencido } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAuth } from "@/hooks/useAuth";
 
 import TareasTable from "@/components/tables/editable/TareasTable";
+import TareasTableNotion from "@/components/tables/editable/TareasTableNotion";
 import TareaPanel from "@/components/tables/editable/TareaPanel";
 import {
   DesempenoMensualView,
@@ -15,7 +17,7 @@ import {
   FinalizadasView,
 } from "@/components/features/tareas";
 import toast from "react-hot-toast";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckSquare,
   Plus,
@@ -35,20 +37,26 @@ import {
   Table,
   TrendingUp,
   Pause,
+  ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 
 export default function TareasPage() {
+  const { empleado } = useAuth();
   const [tareas, setTareas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("todos");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [tareaSeleccionada, setTareaSeleccionada] = useState(null);
-  const [vistaActual, setVistaActual] = useState("tabla");
+  const [vistaActual, setVistaActual] = useState("mis-tareas");
   const [panelOpen, setPanelOpen] = useState(false);
+  const [empleados, setEmpleados] = useState([]);
+  const [empleadosExpandidos, setEmpleadosExpandidos] = useState(new Set());
 
   useEffect(() => {
     cargarTareas();
+    cargarEmpleados();
   }, []);
 
   // Suscripción en tiempo real para INSERT de nuevas tareas
@@ -119,6 +127,21 @@ export default function TareasPage() {
     }
   };
 
+  const cargarEmpleados = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("empleados")
+        .select("id, nombre, apellido")
+        .eq("activo", true)
+        .order("nombre");
+
+      if (error) throw error;
+      setEmpleados(data || []);
+    } catch (error) {
+      console.error("Error cargando empleados:", error);
+    }
+  };
+
   const handleNuevaTarea = () => {
     if (panelOpen) {
       setPanelOpen(false);
@@ -148,6 +171,19 @@ export default function TareasPage() {
     const esFinalizada = tarea.estado?.categoria === "completado";
     if (esFinalizada) return false;
 
+    // Filtro por vista
+    if (vistaActual === "mis-tareas" && empleado) {
+      const esMiTarea =
+        tarea.empleado_creador_id === empleado.id ||
+        tarea.empleados_responsables?.some(
+          (emp) => emp.empleado?.id === empleado.id
+        ) ||
+        tarea.empleados_designados?.some(
+          (emp) => emp.empleado?.id === empleado.id
+        );
+      if (!esMiTarea) return false;
+    }
+
     const searchLower = searchTerm.toLowerCase();
     const matchSearch =
       tarea.nombre?.toLowerCase().includes(searchLower) ||
@@ -164,6 +200,44 @@ export default function TareasPage() {
 
     return matchSearch && matchEstado;
   });
+
+  // Función para toggle expandir/colapsar empleado
+  const toggleEmpleado = (empleadoId) => {
+    setEmpleadosExpandidos((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(empleadoId)) {
+        newSet.delete(empleadoId);
+      } else {
+        newSet.add(empleadoId);
+      }
+      return newSet;
+    });
+  };
+
+  // Obtener tareas de un empleado específico
+  const getTareasPorEmpleado = (empleadoId) => {
+    return tareasFiltradas.filter((tarea) => {
+      const perteneceAlEmpleado =
+        tarea.empleado_creador_id === empleadoId ||
+        tarea.empleados_responsables?.some(
+          (emp) => emp.empleado?.id === empleadoId
+        ) ||
+        tarea.empleados_designados?.some(
+          (emp) => emp.empleado?.id === empleadoId
+        );
+      return perteneceAlEmpleado;
+    });
+  };
+
+  // Obtener empleados con tareas (para vista "Todas")
+  const getEmpleadosConTareas = () => {
+    return empleados
+      .map((emp) => ({
+        ...emp,
+        cantidadTareas: getTareasPorEmpleado(emp.id).length,
+      }))
+      .filter((emp) => emp.cantidadTareas > 0);
+  };
 
   // Estadísticas
   const stats = {
@@ -233,17 +307,30 @@ export default function TareasPage() {
         >
           <div className="flex border rounded-lg overflow-hidden">
             <Button
-              variant={vistaActual === "tabla" ? "default" : "ghost"}
+              variant={vistaActual === "mis-tareas" ? "default" : "ghost"}
               size="default"
-              onClick={() => setVistaActual("tabla")}
+              onClick={() => setVistaActual("mis-tareas")}
+              className={`rounded-none px-4 whitespace-nowrap ${
+                vistaActual === "mis-tareas"
+                  ? "bg-linear-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white shadow-md"
+                  : ""
+              }`}
+            >
+              <User className="h-4 w-4 mr-2" />
+              Mis Tareas
+            </Button>
+            <Button
+              variant={vistaActual === "todas" ? "default" : "ghost"}
+              size="default"
+              onClick={() => setVistaActual("todas")}
               className={`rounded-none px-4 ${
-                vistaActual === "tabla"
+                vistaActual === "todas"
                   ? "bg-linear-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white shadow-md"
                   : ""
               }`}
             >
               <Table className="h-4 w-4 mr-2" />
-              Tabla
+              Todas
             </Button>
             <Button
               variant={vistaActual === "desempeno" ? "default" : "ghost"}
@@ -298,8 +385,8 @@ export default function TareasPage() {
         </motion.div>
       </motion.div>
 
-      {/* Search and Filters - Solo mostrar en vista de tabla */}
-      {vistaActual === "tabla" && (
+      {/* Search and Filters - Solo mostrar en vista de tabla y mis tareas */}
+      {(vistaActual === "mis-tareas" || vistaActual === "todas") && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -316,6 +403,7 @@ export default function TareasPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
+
             <select
               className="px-4 h-10 border-2 border-gray-300 rounded-xl text-sm font-medium min-w-[180px] whitespace-nowrap focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none transition-all bg-white hover:border-primary-400 cursor-pointer"
               value={filtroEstado}
@@ -410,17 +498,17 @@ export default function TareasPage() {
               onTareasChange={setTareas}
             />
           )
-        ) : vistaActual === "tabla" ? (
+        ) : vistaActual === "mis-tareas" ? (
           tareasFiltradas.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-xl shadow-sm border border-gray-200">
               <CheckSquare className="h-16 w-16 text-gray-400 mb-4" />
               <h3 className="text-xl font-semibold text-gray-900">
-                No hay tareas
+                No tienes tareas asignadas
               </h3>
               <p className="text-sm text-gray-500 mt-2 mb-6">
                 {searchTerm
                   ? "No se encontraron tareas con ese criterio"
-                  : "Comienza agregando tu primera tarea"}
+                  : "Las tareas donde eres creador o responsable aparecerán aquí"}
               </p>
               {!searchTerm && (
                 <Button
@@ -439,6 +527,101 @@ export default function TareasPage() {
               onTareaClick={handleEditarTarea}
               onTareasChange={setTareas}
             />
+          )
+        ) : vistaActual === "todas" ? (
+          getEmpleadosConTareas().length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-xl shadow-sm border border-gray-200">
+              <User className="h-16 w-16 text-gray-400 mb-4" />
+              <h3 className="text-xl font-semibold text-gray-900">
+                No hay tareas asignadas
+              </h3>
+              <p className="text-sm text-gray-500 mt-2 mb-6">
+                {searchTerm
+                  ? "No se encontraron tareas con ese criterio"
+                  : "Las tareas aparecerán organizadas por empleado"}
+              </p>
+              {!searchTerm && (
+                <Button
+                  onClick={handleNuevaTarea}
+                  className="bg-primary-600 hover:bg-primary-700"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Agregar Tarea
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {getEmpleadosConTareas().map((empleado) => {
+                const tareasEmpleado = getTareasPorEmpleado(empleado.id);
+                const estaExpandido = empleadosExpandidos.has(empleado.id);
+
+                return (
+                  <motion.div
+                    key={empleado.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+                  >
+                    {/* Header del empleado - clickeable para expandir/colapsar */}
+                    <button
+                      onClick={() => toggleEmpleado(empleado.id)}
+                      className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <motion.div
+                          animate={{ rotate: estaExpandido ? 90 : 0 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <ChevronRight className="h-5 w-5 text-gray-500" />
+                        </motion.div>
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
+                            <User className="h-5 w-5 text-primary-600" />
+                          </div>
+                          <div className="text-left">
+                            <h3 className="font-semibold text-gray-900">
+                              {empleado.nombre} {empleado.apellido}
+                            </h3>
+                            <p className="text-sm text-gray-500">
+                              {empleado.cantidadTareas} tarea
+                              {empleado.cantidadTareas !== 1 ? "s" : ""}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-3 py-1 bg-primary-50 text-primary-700 rounded-full text-sm font-medium">
+                          {empleado.cantidadTareas}
+                        </span>
+                      </div>
+                    </button>
+
+                    {/* Contenido expandible - Tabla de tareas */}
+                    <AnimatePresence>
+                      {estaExpandido && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className="border-t border-gray-200 overflow-hidden"
+                        >
+                          <div className="p-4">
+                            <TareasTable
+                              tareas={tareasEmpleado}
+                              onUpdate={cargarTareas}
+                              onTareaClick={handleEditarTarea}
+                              onTareasChange={setTareas}
+                            />
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                );
+              })}
+            </div>
           )
         ) : null}
       </motion.div>

@@ -8,8 +8,17 @@ import { usePopper } from "react-popper";
 import { motion, AnimatePresence } from "framer-motion";
 import Select from "react-select";
 import toast from "react-hot-toast";
-import { X, Calendar, User, FileText, Clock, AlertCircle } from "lucide-react";
+import {
+  X,
+  Calendar,
+  User,
+  FileText,
+  Clock,
+  AlertCircle,
+  BookOpen,
+} from "lucide-react";
 import clsx from "clsx";
+import BlockNoteEditor from "@/components/features/tareas/BlockNoteEditor";
 
 export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
   const [loading, setLoading] = useState(false);
@@ -1480,10 +1489,32 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                 />
               </div>
 
-              {/* Notas */}
-              <div className="space-y-2 mt-4">
+              {/* Notas - Editor Estilo Notion */}
+              <div className="space-y-3 mt-6 pt-6 border-t">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-primary-600" />
+                  <label className="text-sm font-semibold text-gray-700">
+                    Notas Enriquecidas
+                  </label>
+                </div>
+                <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                  {tarea?.id ? (
+                    <BlockNoteEditor tareaId={tarea.id} readOnly={false} />
+                  ) : (
+                    <div className="text-center py-8 text-gray-400">
+                      <FileText className="h-10 w-10 mx-auto mb-2" />
+                      <p className="text-sm">
+                        Guarda la tarea primero para agregar notas
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Notas simples (legacy - mantener para compatibilidad) */}
+              <div className="space-y-2 mt-4 hidden">
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Notas
+                  Notas Simples (Obsoleto)
                 </label>
                 <EditableText
                   value={datosActuales?.notas || ""}

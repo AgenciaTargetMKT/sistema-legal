@@ -1,5 +1,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "./blocknote-custom.css";
 import ToastProvider from "@/components/providers/toast-provider";
 
 const geistSans = Geist({
