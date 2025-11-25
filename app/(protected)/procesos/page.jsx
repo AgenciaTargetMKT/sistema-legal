@@ -287,10 +287,7 @@ export default function ProcesosPage() {
               <Button variant="outline" size="icon" className="mr-2">
                 <Filter className="h-4 w-4 " />
               </Button>
-              <Button size="lg" className="gap-2" onClick={handleNuevoProceso}>
-                <Plus className="h-5 w-5" />
-                Nuevo Proceso
-              </Button>
+             
             </div>
           </div>
         </CardHeader>

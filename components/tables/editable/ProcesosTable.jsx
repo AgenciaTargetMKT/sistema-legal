@@ -38,7 +38,7 @@ export default function ProcesosTable({
   const [tiposProceso, setTiposProceso] = useState([]);
   const [sortConfig, setSortConfig] = useState(null);
   const [seleccionados, setSeleccionados] = useState(new Set());
-  
+
   // Estados para paginación
   const [paginaActual, setPaginaActual] = useState(1);
   const [elementosPorPagina, setElementosPorPagina] = useState(20);
@@ -70,8 +70,6 @@ export default function ProcesosTable({
           table: "procesos",
         },
         (payload) => {
-       
-
           if (payload.eventType === "INSERT") {
             // Recargar todo cuando se inserta un nuevo proceso
             onUpdate?.();
@@ -107,8 +105,6 @@ export default function ProcesosTable({
           table: "comentarios",
         },
         async (payload) => {
-        
-
           if (
             payload.eventType === "INSERT" ||
             payload.eventType === "UPDATE"
@@ -450,9 +446,79 @@ export default function ProcesosTable({
   };
 
   return (
-    <div className="w-full">
+    <div className="w-full space-y-3">
+      {/* Controles superiores: Paginación y acciones */}
+      <div className="flex items-center justify-between">
+        {/* Botón Nueva fila */}
+        <button
+          onClick={crearNuevoProceso}
+          className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2 shadow-sm"
+        >
+          <span className="text-lg">+</span>
+          <span>Nuevo proceso</span>
+        </button>
+
+        {/* Paginación y selector de elementos */}
+        {procesos.length > 0 && (
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Mostrar:</span>
+              <select
+                value={elementosPorPagina}
+                onChange={(e) =>
+                  cambiarElementosPorPagina(Number(e.target.value))
+                }
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none bg-white"
+              >
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+
+            <span className="text-sm text-gray-600">
+              {indexPrimero + 1}-{Math.min(indexUltimo, procesos.length)} de{" "}
+              {procesos.length}
+            </span>
+
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => cambiarPagina(paginaActual - 1)}
+                disabled={paginaActual === 1}
+                className={clsx(
+                  "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+                  paginaActual === 1
+                    ? "text-gray-400 cursor-not-allowed"
+                    : "text-gray-700 hover:bg-gray-100"
+                )}
+              >
+                ←
+              </button>
+
+              <span className="px-3 py-1.5 text-sm font-medium text-gray-700">
+                {paginaActual} / {totalPaginas}
+              </span>
+
+              <button
+                onClick={() => cambiarPagina(paginaActual + 1)}
+                disabled={paginaActual === totalPaginas}
+                className={clsx(
+                  "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+                  paginaActual === totalPaginas
+                    ? "text-gray-400 cursor-not-allowed"
+                    : "text-gray-700 hover:bg-gray-100"
+                )}
+              >
+                →
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Barra de selección múltiple */}
       {seleccionados.size > 0 && (
-        <div className="mb-2 px-4 py-2 bg-primary-50 border border-primary-200 rounded-lg flex items-center justify-between">
+        <div className="px-4 py-2 bg-primary-50 border border-primary-200 rounded-lg flex items-center justify-between">
           <span className="text-sm text-primary-900 font-medium">
             {seleccionados.size} proceso{seleccionados.size !== 1 ? "s" : ""}{" "}
             seleccionado{seleccionados.size !== 1 ? "s" : ""}
@@ -466,6 +532,8 @@ export default function ProcesosTable({
           </button>
         </div>
       )}
+
+      {/* Tabla */}
       <div className="w-full overflow-auto bg-white rounded-lg shadow-sm border">
         <DndContext
           sensors={sensors}
@@ -567,134 +635,11 @@ export default function ProcesosTable({
                     crearNuevoEstado={crearNuevoEstado}
                   />
                 ))}
-                <tr className="border-t-2 border-gray-200">
-                  <td colSpan="11" className="p-0">
-                    <button
-                      onClick={crearNuevoProceso}
-                      className="w-full px-4 py-3 text-left text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors flex items-center gap-2"
-                    >
-                      <span className="text-lg">+</span>
-                      <span>Nueva fila</span>
-                    </button>
-                  </td>
-                </tr>
               </tbody>
             </SortableContext>
           </table>
         </DndContext>
       </div>
-
-      {/* Controles de paginación */}
-      {procesos.length > 0 && (
-        <div className="mt-4 flex items-center justify-between px-4 py-3 bg-white rounded-lg shadow-sm border">
-          {/* Información de elementos */}
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">
-              Mostrando {indexPrimero + 1} a {Math.min(indexUltimo, procesos.length)} de {procesos.length} procesos
-            </span>
-            
-            {/* Selector de elementos por página */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Mostrar:</span>
-              <select
-                value={elementosPorPagina}
-                onChange={(e) => cambiarElementosPorPagina(Number(e.target.value))}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none"
-              >
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Botones de navegación */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => cambiarPagina(1)}
-              disabled={paginaActual === 1}
-              className={clsx(
-                "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
-                paginaActual === 1
-                  ? "text-gray-400 cursor-not-allowed"
-                  : "text-gray-700 hover:bg-gray-100"
-              )}
-            >
-              Primera
-            </button>
-            
-            <button
-              onClick={() => cambiarPagina(paginaActual - 1)}
-              disabled={paginaActual === 1}
-              className={clsx(
-                "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
-                paginaActual === 1
-                  ? "text-gray-400 cursor-not-allowed"
-                  : "text-gray-700 hover:bg-gray-100"
-              )}
-            >
-              Anterior
-            </button>
-
-            {/* Números de página */}
-            <div className="flex items-center gap-1">
-              {Array.from({ length: Math.min(5, totalPaginas) }, (_, i) => {
-                let numeroPagina;
-                if (totalPaginas <= 5) {
-                  numeroPagina = i + 1;
-                } else if (paginaActual <= 3) {
-                  numeroPagina = i + 1;
-                } else if (paginaActual >= totalPaginas - 2) {
-                  numeroPagina = totalPaginas - 4 + i;
-                } else {
-                  numeroPagina = paginaActual - 2 + i;
-                }
-
-                return (
-                  <button
-                    key={numeroPagina}
-                    onClick={() => cambiarPagina(numeroPagina)}
-                    className={clsx(
-                      "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
-                      paginaActual === numeroPagina
-                        ? "bg-primary-600 text-white"
-                        : "text-gray-700 hover:bg-gray-100"
-                    )}
-                  >
-                    {numeroPagina}
-                  </button>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={() => cambiarPagina(paginaActual + 1)}
-              disabled={paginaActual === totalPaginas}
-              className={clsx(
-                "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
-                paginaActual === totalPaginas
-                  ? "text-gray-400 cursor-not-allowed"
-                  : "text-gray-700 hover:bg-gray-100"
-              )}
-            >
-              Siguiente
-            </button>
-
-            <button
-              onClick={() => cambiarPagina(totalPaginas)}
-              disabled={paginaActual === totalPaginas}
-              className={clsx(
-                "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
-                paginaActual === totalPaginas
-                  ? "text-gray-400 cursor-not-allowed"
-                  : "text-gray-700 hover:bg-gray-100"
-              )}
-            >
-              Última
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -733,27 +678,24 @@ function SortableRow({
     <tr
       ref={setNodeRef}
       style={style}
-      className={clsx(
-        "border-b hover:bg-gray-50 transition-colors group",
-        isDragging && "bg-primary-50"
-      )}
+      className={clsx("border-b hover:bg-gray-50 group")}
     >
-      <td className="px-2 py-1.5 text-center">
+      <td className="px-2 py-2 text-center border-r">
         <input
           type="checkbox"
           checked={seleccionado}
           onChange={() => onToggleSeleccion(proceso.id)}
-          className="cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+          className="cursor-pointer"
         />
       </td>
-      <td className="px-2 py-1.5 border-r text-center">
-        <button
+      <td className="px-2 py-2 text-center border-r">
+        <div
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="cursor-grab active:cursor-grabbing flex items-center justify-center text-gray-400 hover:text-gray-600"
         >
           <GripVertical className="w-4 h-4" />
-        </button>
+        </div>
       </td>
       <TextCell
         value={proceso.nombre}
@@ -1003,7 +945,7 @@ function SearchableSelectCell({
       <td
         ref={setReferenceElement}
         className={clsx(
-          "px-3 py-1.5 border-r cursor-pointer transition-all",
+          "px-3 py-2 border-r cursor-pointer transition-all align-middle",
           isOpen
             ? "bg-primary-50 shadow-inner ring-2 ring-primary-400 ring-inset"
             : "hover:bg-gray-50",
@@ -1011,19 +953,21 @@ function SearchableSelectCell({
         )}
         onClick={() => setIsOpen(!isOpen)}
       >
-        {value ? (
-          <span
-            className="inline-block px-2 py-0.5 rounded text-xs font-medium transition-all truncate"
-            style={{
-              backgroundColor: `${clienteColor}20`,
-              color: clienteColor,
-            }}
-          >
-            {value}
-          </span>
-        ) : (
-          <span className="text-gray-400 text-sm">Seleccionar...</span>
-        )}
+        <div className="flex items-center min-h-[24px]">
+          {value ? (
+            <span
+              className="inline-block px-2 py-0.5 rounded text-xs font-medium transition-all truncate max-w-full"
+              style={{
+                backgroundColor: `${clienteColor}20`,
+                color: clienteColor,
+              }}
+            >
+              {value}
+            </span>
+          ) : (
+            <span className="text-gray-400 text-xs">Seleccionar...</span>
+          )}
+        </div>
       </td>
 
       {isOpen &&
@@ -1150,7 +1094,7 @@ function SelectCell({
       <td
         ref={setReferenceElement}
         className={clsx(
-          "px-3 py-1.5 border-r cursor-pointer transition-all",
+          "px-3 py-2 border-r cursor-pointer transition-all align-middle",
           isOpen
             ? "bg-primary-50 shadow-inner ring-2 ring-primary-400 ring-inset"
             : "hover:bg-gray-50",
@@ -1158,19 +1102,21 @@ function SelectCell({
         )}
         onClick={() => setIsOpen(!isOpen)}
       >
-        {value ? (
-          <span
-            className="inline-block px-2 py-0.5 rounded text-xs font-medium transition-all truncate"
-            style={{
-              backgroundColor: color || "#f3f4f6",
-              color: textColor || "#374151",
-            }}
-          >
-            {value}
-          </span>
-        ) : (
-          <span className="text-gray-400 text-sm">{placeholder}</span>
-        )}
+        <div className="flex items-center min-h-6">
+          {value ? (
+            <span
+              className="inline-block px-2 py-0.5 rounded text-xs font-medium truncate max-w-full"
+              style={{
+                backgroundColor: color || "#f3f4f6",
+                color: textColor || "#374151",
+              }}
+            >
+              {value}
+            </span>
+          ) : (
+            <span className="text-gray-400 text-xs">{placeholder}</span>
+          )}
+        </div>
       </td>
 
       {isOpen &&
@@ -1289,25 +1235,27 @@ function DateCell({ value, onUpdate }) {
   return (
     <td
       className={clsx(
-        "px-3 py-1.5 border-r text-xs transition-all",
+        "px-3 py-2 border-r text-xs transition-all align-middle",
         editing
           ? "bg-primary-50 shadow-inner ring-2 ring-primary-400 ring-inset"
           : "hover:bg-gray-50 cursor-pointer"
       )}
       onClick={() => !editing && setEditing(true)}
     >
-      {editing ? (
-        <input
-          type="date"
-          value={currentValue || ""}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          className="w-full outline-none bg-transparent text-xs"
-          autoFocus
-        />
-      ) : (
-        <div className="min-h-5">{formatDate(currentValue)}</div>
-      )}
+      <div className="flex items-center min-h-6">
+        {editing ? (
+          <input
+            type="date"
+            value={currentValue || ""}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            className="w-full outline-none bg-transparent text-xs"
+            autoFocus
+          />
+        ) : (
+          <span>{formatDate(currentValue)}</span>
+        )}
+      </div>
     </td>
   );
 }

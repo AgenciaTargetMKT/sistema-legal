@@ -39,6 +39,10 @@ export default function TareasTable({
   const [sortConfig, setSortConfig] = useState(null);
   const [seleccionadas, setSeleccionadas] = useState(new Set());
 
+  // Estados para paginación
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [elementosPorPagina, setElementosPorPagina] = useState(20);
+
   // Ref para prevenir llamadas duplicadas al calendario
   const calendarioEnProgreso = useRef(new Set());
 
@@ -505,10 +509,100 @@ export default function TareasTable({
     }
   };
 
+  // Calcular paginación
+  const indexUltimo = paginaActual * elementosPorPagina;
+  const indexPrimero = indexUltimo - elementosPorPagina;
+  const tareasPaginadas = tareas.slice(indexPrimero, indexUltimo);
+  const totalPaginas = Math.ceil(tareas.length / elementosPorPagina);
+
+  // Resetear a página 1 cuando cambian las tareas o elementos por página
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [elementosPorPagina, tareas.length]);
+
+  const cambiarPagina = (numeroPagina) => {
+    setPaginaActual(numeroPagina);
+  };
+
+  const cambiarElementosPorPagina = (cantidad) => {
+    setElementosPorPagina(cantidad);
+    setPaginaActual(1);
+  };
+
   return (
-    <div className="w-full">
+    <div className="w-full space-y-3">
+      {/* Controles superiores: Paginación y acciones */}
+      <div className="flex items-center justify-between">
+        {/* Botón Nueva tarea */}
+        <button
+          onClick={crearNuevaTarea}
+          className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2 shadow-sm"
+        >
+          <span className="text-lg">+</span>
+          <span>Nueva tarea</span>
+        </button>
+
+        {/* Paginación y selector de elementos */}
+        {tareas.length > 0 && (
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Mostrar:</span>
+              <select
+                value={elementosPorPagina}
+                onChange={(e) =>
+                  cambiarElementosPorPagina(Number(e.target.value))
+                }
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none bg-white"
+              >
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+
+            <span className="text-sm text-gray-600">
+              {indexPrimero + 1}-{Math.min(indexUltimo, tareas.length)} de{" "}
+              {tareas.length}
+            </span>
+
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => cambiarPagina(paginaActual - 1)}
+                disabled={paginaActual === 1}
+                className={clsx(
+                  "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+                  paginaActual === 1
+                    ? "text-gray-400 cursor-not-allowed"
+                    : "text-gray-700 hover:bg-gray-100"
+                )}
+              >
+                ←
+              </button>
+
+              <span className="px-3 py-1.5 text-sm font-medium text-gray-700">
+                {paginaActual} / {totalPaginas}
+              </span>
+
+              <button
+                onClick={() => cambiarPagina(paginaActual + 1)}
+                disabled={paginaActual === totalPaginas}
+                className={clsx(
+                  "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+                  paginaActual === totalPaginas
+                    ? "text-gray-400 cursor-not-allowed"
+                    : "text-gray-700 hover:bg-gray-100"
+                )}
+              >
+                →
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Barra de selección múltiple */}
       {seleccionadas.size > 0 && (
-        <div className="mb-2 px-4 py-2 bg-primary-50 border border-primary-200 rounded-lg flex items-center justify-between">
+        <div className="px-4 py-2 bg-primary-50 border border-primary-200 rounded-lg flex items-center justify-between">
           <span className="text-sm text-primary-900 font-medium">
             {seleccionadas.size} tarea{seleccionadas.size !== 1 ? "s" : ""}{" "}
             seleccionada{seleccionadas.size !== 1 ? "s" : ""}
@@ -522,6 +616,8 @@ export default function TareasTable({
           </button>
         </div>
       )}
+
+      {/* Tabla */}
       <div className="w-full overflow-auto bg-white rounded-lg shadow-sm border">
         <DndContext
           sensors={sensors}
@@ -594,11 +690,11 @@ export default function TareasTable({
               </tr>
             </thead>
             <SortableContext
-              items={tareas.map((t) => t.id)}
+              items={tareasPaginadas.map((t) => t.id)}
               strategy={verticalListSortingStrategy}
             >
               <tbody>
-                {tareas.map((tarea) => (
+                {tareasPaginadas.map((tarea) => (
                   <SortableRow
                     key={tarea.id}
                     tarea={tarea}
@@ -611,17 +707,6 @@ export default function TareasTable({
                     onToggleSeleccion={toggleSeleccion}
                   />
                 ))}
-                <tr className="border-t-2 border-gray-200">
-                  <td colSpan="8" className="p-0">
-                    <button
-                      onClick={crearNuevaTarea}
-                      className="w-full px-4 py-3 text-left text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors flex items-center gap-2"
-                    >
-                      <span className="text-lg">+</span>
-                      Nueva tarea
-                    </button>
-                  </td>
-                </tr>
               </tbody>
             </SortableContext>
           </table>
