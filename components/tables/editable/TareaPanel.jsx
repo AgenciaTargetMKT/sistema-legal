@@ -69,19 +69,61 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
     if (isOpen && !nuevaTareaTemp && !tarea?.id) {
       // Modo creación: inicializar estado temporal
 
-      setNuevaTareaTemp({
-        nombre: "",
-        descripcion: "",
-        notas: "",
-        importancia: "no importante",
-        urgencia: "no urgente",
-        fecha_vencimiento: null,
-        proceso_id: null,
-        cliente_id: null,
-        estado_id: null,
-        empleados_designados: [],
-        empleados_responsables: [],
-      });
+      // Función asíncrona para cargar empleado actual y configurar responsable por defecto
+      const inicializarNuevaTarea = async () => {
+        let empleadoActualData = usuarioActual;
+        let empleadoActualId = usuarioActual?.id;
+
+        // Si no tenemos el usuario actual cargado, intentar cargarlo
+        if (!empleadoActualId) {
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          if (user) {
+            const { data: empleadoData } = await supabase
+              .from("empleados")
+              .select("id, nombre, apellido, email")
+              .eq("auth_user_id", user.id)
+              .single();
+
+            if (empleadoData) {
+              empleadoActualId = empleadoData.id;
+              empleadoActualData = empleadoData;
+              setUsuarioActual(empleadoData);
+            }
+          }
+        }
+
+        setNuevaTareaTemp({
+          nombre: "",
+          descripcion: "",
+          notas: "",
+          importancia: "no importante",
+          urgencia: "no urgente",
+          fecha_vencimiento: null,
+          proceso_id: null,
+          cliente_id: null,
+          estado_id: null,
+          empleados_designados: [],
+          // Establecer usuario logueado como responsable por defecto CON LOS DATOS COMPLETOS
+          empleados_responsables:
+            empleadoActualId && empleadoActualData
+              ? [
+                  {
+                    empleado_id: empleadoActualId,
+                    empleado: {
+                      id: empleadoActualData.id,
+                      nombre: empleadoActualData.nombre,
+                      apellido: empleadoActualData.apellido,
+                      email: empleadoActualData.email,
+                    },
+                  },
+                ]
+              : [],
+        });
+      };
+
+      inicializarNuevaTarea();
       setTituloLocal("");
       valorAnteriorTitulo.current = "";
       if (!catalogosCargados) {
@@ -993,6 +1035,24 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
     estados.find((e) => e.id === datosActuales?.estado_id)?.nombre ===
       "finalizado";
 
+  // Verificar si el usuario actual es SOLO designado (no responsable ni creador)
+  const esUsuarioDesignado = () => {
+    if (!usuarioActual?.id || !datosActuales) return false;
+
+    const esCreador = datosActuales.empleado_creador_id === usuarioActual.id;
+    const esResponsable = (datosActuales.empleados_responsables || []).some(
+      (emp) => emp.empleado_id === usuarioActual.id
+    );
+    const esDesignado = (datosActuales.empleados_designados || []).some(
+      (emp) => emp.empleado_id === usuarioActual.id
+    );
+
+    // Es designado SOLO si está en designados pero NO es creador ni responsable
+    return esDesignado && !esCreador && !esResponsable;
+  };
+
+  const soloDesignado = esUsuarioDesignado();
+
   // No renderizar si el panel está cerrado O si no hay datos
   if (!isOpen || !datosActuales) return null;
 
@@ -1320,6 +1380,18 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                     <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse"></div>
                     <div className="h-6 w-20 bg-gray-200 rounded-full animate-pulse"></div>
                   </div>
+                ) : soloDesignado ? (
+                  <div className="flex items-center gap-2">
+                    <EmpleadosBadgeSelector
+                      value={datosActuales?.empleados_responsables || []}
+                      options={empleados}
+                      disabled={true}
+                      placeholder="Solo lectura..."
+                    />
+                    <span className="text-xs text-amber-600 font-medium">
+                      🔒 Solo los responsables pueden editar esto
+                    </span>
+                  </div>
                 ) : (
                   <EmpleadosBadgeSelector
                     value={datosActuales?.empleados_responsables || []}
@@ -1494,7 +1566,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                 <div className="flex items-center gap-2">
                   <BookOpen className="h-4 w-4 text-primary-600" />
                   <label className="text-sm font-semibold text-gray-700">
-                    Notas Enriquecidas
+                    Notas
                   </label>
                 </div>
                 <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
@@ -1870,149 +1942,6 @@ function EditableText({ value, onUpdate, multiline = false, placeholder }) {
   );
 }
 
-// Componente de select editable compacto
-function EditableSelect({
-  value,
-  options,
-  onUpdate,
-  badge = false,
-  compact = false,
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [referenceElement, setReferenceElement] = useState(null);
-  const [popperElement, setPopperElement] = useState(null);
-  const { styles, attributes } = usePopper(referenceElement, popperElement, {
-    placement: "bottom-start",
-    strategy: "fixed",
-  });
-
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (
-        popperElement &&
-        !popperElement.contains(e.target) &&
-        referenceElement &&
-        !referenceElement.contains(e.target)
-      ) {
-        setIsOpen(false);
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () =>
-        document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [isOpen, popperElement, referenceElement]);
-
-  const getImportanciaUrgenciaColor = (value) => {
-    const colors = {
-      importante: "#EF4444",
-      "no importante": "#10B981",
-      urgente: "#F59E0B",
-      "no urgente": "#3B82F6",
-    };
-    return colors[value?.toLowerCase()] || "#6B7280";
-  };
-
-  const selectedOption = options.find(
-    (opt) =>
-      opt.nombre?.toLowerCase() === value?.toLowerCase() || opt.id === value
-  );
-
-  return (
-    <div className="w-full">
-      <div
-        ref={setReferenceElement}
-        onClick={() => setIsOpen(!isOpen)}
-        className={clsx(
-          "w-full px-2 py-1 text-sm rounded-lg cursor-pointer transition-all",
-          isOpen ? "bg-primary-50 ring-2 ring-primary-400" : "hover:bg-gray-100"
-        )}
-      >
-        {badge && value ? (
-          <span
-            className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-medium"
-            style={{
-              backgroundColor:
-                value === "importante" ||
-                value === "no importante" ||
-                value === "urgente" ||
-                value === "no urgente"
-                  ? `${getImportanciaUrgenciaColor(value)}20`
-                  : selectedOption?.color
-                  ? `${selectedOption.color}20`
-                  : "#E5E7EB",
-              color:
-                value === "importante" ||
-                value === "no importante" ||
-                value === "urgente" ||
-                value === "no urgente"
-                  ? getImportanciaUrgenciaColor(value)
-                  : selectedOption?.color || "#6B7280",
-            }}
-          >
-            {value}
-          </span>
-        ) : (
-          <span className={value ? "text-gray-900" : "text-gray-400"}>
-            {value || "Seleccionar"}
-          </span>
-        )}
-      </div>
-
-      {isOpen &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            ref={setPopperElement}
-            style={styles.popper}
-            {...attributes.popper}
-            className="z-[11001] bg-white border-2 border-primary-400 shadow-xl rounded-lg py-1 min-w-[160px] max-h-[300px] overflow-auto"
-          >
-            {options.map((option) => (
-              <button
-                key={option.id}
-                onClick={() => {
-                  onUpdate(option.id);
-                  setIsOpen(false);
-                }}
-                className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-50 transition-colors"
-              >
-                {badge && (option.color || option.id === value) ? (
-                  <span
-                    className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
-                    style={{
-                      backgroundColor:
-                        option.id === "importante" ||
-                        option.id === "no importante" ||
-                        option.id === "urgente" ||
-                        option.id === "no urgente"
-                          ? `${getImportanciaUrgenciaColor(option.id)}20`
-                          : `${option.color}20`,
-                      color:
-                        option.id === "importante" ||
-                        option.id === "no importante" ||
-                        option.id === "urgente" ||
-                        option.id === "no urgente"
-                          ? getImportanciaUrgenciaColor(option.id)
-                          : option.color,
-                    }}
-                  >
-                    {option.nombre}
-                  </span>
-                ) : (
-                  option.nombre
-                )}
-              </button>
-            ))}
-          </div>,
-          document.body
-        )}
-    </div>
-  );
-}
-
 // Componente de fecha editable compacto
 function EditableDate({ value, onUpdate, compact = false }) {
   const [editing, setEditing] = useState(false);
@@ -2072,81 +2001,14 @@ function EditableDate({ value, onUpdate, compact = false }) {
   );
 }
 
-// Componente de fecha con hora editable
-function EditableDateWithTime({ value, onUpdate, compact = false }) {
-  const [editing, setEditing] = useState(false);
-  const [currentDate, setCurrentDate] = useState("");
-  const [currentTime, setCurrentTime] = useState("");
-
-  useEffect(() => {
-    if (value) {
-      const date = new Date(value);
-      setCurrentDate(date.toISOString().split("T")[0]);
-      setCurrentTime(
-        date.toTimeString().split(" ")[0].substring(0, 5) || "00:00"
-      );
-    } else {
-      setCurrentDate("");
-      setCurrentTime("00:00");
-    }
-  }, [value]);
-
-  const formatearFecha = (fecha) => {
-    if (!fecha) return null;
-    return new Date(fecha).toLocaleString("es-ES", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const handleSave = () => {
-    setEditing(false);
-    if (currentDate) {
-      const fechaCompleta = `${currentDate}T${currentTime}:00`;
-      if (fechaCompleta !== value) {
-        onUpdate(fechaCompleta);
-      }
-    }
-  };
-
-  return (
-    <div className="w-full">
-      {editing ? (
-        <div className="flex gap-2">
-          <input
-            type="date"
-            value={currentDate}
-            onChange={(e) => setCurrentDate(e.target.value)}
-            onBlur={handleSave}
-            className="w-40 px-2 py-1 text-sm border-2 border-primary-400 rounded bg-primary-50 outline-none"
-          />
-          <input
-            type="time"
-            value={currentTime}
-            onChange={(e) => setCurrentTime(e.target.value)}
-            onBlur={handleSave}
-            className="w-24 px-2 py-1 text-sm border-2 border-primary-400 rounded bg-primary-50 outline-none"
-          />
-        </div>
-      ) : (
-        <div
-          onClick={() => setEditing(true)}
-          className="w-full px-2 py-1 text-sm rounded hover:bg-gray-100 cursor-pointer transition-colors"
-        >
-          <span className={value ? "text-gray-900" : "text-gray-400"}>
-            {value ? formatearFecha(value) : "Sin fecha"}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // Componente para seleccionar empleados con badges de colores
-function EmpleadosBadgeSelector({ value, options, onUpdate, placeholder }) {
+function EmpleadosBadgeSelector({
+  value,
+  options,
+  onUpdate,
+  placeholder,
+  disabled = false,
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
   const updateInProgress = useRef(false);
@@ -2283,8 +2145,13 @@ function EmpleadosBadgeSelector({ value, options, onUpdate, placeholder }) {
   return (
     <div ref={containerRef} className="relative flex-1">
       <div
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex flex-wrap gap-1.5 px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors min-h-[32px]"
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        className={clsx(
+          "flex flex-wrap gap-1.5 px-2 py-1.5 rounded-lg transition-colors min-h-[32px]",
+          disabled
+            ? "cursor-not-allowed opacity-60 bg-gray-100"
+            : "hover:bg-gray-50 cursor-pointer"
+        )}
       >
         {value && value.length > 0 ? (
           value.map((emp, index) => {
@@ -2308,13 +2175,15 @@ function EmpleadosBadgeSelector({ value, options, onUpdate, placeholder }) {
                 }}
               >
                 <span>{primerNombre}</span>
-                <button
-                  onClick={(e) => handleRemoveEmpleado(empleadoId, e)}
-                  className="ml-1 hover:bg-black hover:bg-opacity-20 rounded-full w-4 h-4 flex items-center justify-center transition-colors"
-                  title="Eliminar"
-                >
-                  ×
-                </button>
+                {!disabled && (
+                  <button
+                    onClick={(e) => handleRemoveEmpleado(empleadoId, e)}
+                    className="ml-1 hover:bg-black hover:bg-opacity-20 rounded-full w-4 h-4 flex items-center justify-center transition-colors"
+                    title="Eliminar"
+                  >
+                    ×
+                  </button>
+                )}
               </span>
             );
           })

@@ -17,6 +17,37 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
   const [lastSaved, setLastSaved] = useState(null);
   const [notaId, setNotaId] = useState(null);
 
+  // Función para subir archivos (imágenes)
+  const uploadFile = async (file) => {
+    try {
+      // Generar nombre único para el archivo
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${tareaId}_${Date.now()}.${fileExt}`;
+      const filePath = `tareas/${fileName}`;
+
+      // Subir archivo a Supabase Storage
+      const { data, error } = await supabase.storage
+        .from("archivos-tareas")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (error) throw error;
+
+      // Obtener URL pública del archivo
+      const { data: publicUrlData } = supabase.storage
+        .from("archivos-tareas")
+        .getPublicUrl(filePath);
+
+      return publicUrlData.publicUrl;
+    } catch (error) {
+      console.error("Error subiendo archivo:", error);
+      toast.error("Error al subir la imagen: " + error.message);
+      throw error;
+    }
+  };
+
   // Crear el editor con configuración inicial
   const editor = useCreateBlockNote({
     initialContent: [
@@ -25,6 +56,7 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
         content: "Escribe tus notas aquí...",
       },
     ],
+    uploadFile, // Agregar soporte para subir archivos
   });
 
   // Cargar notas desde Supabase

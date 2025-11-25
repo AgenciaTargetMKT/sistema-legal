@@ -66,129 +66,59 @@ CREATE INDEX IF NOT EXISTS idx_notas_tarea_historial_tarea ON notas_tarea_histor
 ALTER TABLE notas_tarea ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notas_tarea_historial ENABLE ROW LEVEL SECURITY;
 
--- Policy: Los usuarios pueden ver notas de tareas que pueden ver
-CREATE POLICY "Los usuarios pueden ver notas de sus tareas"
+-- Policy: TODOS los usuarios autenticados pueden ver TODAS las notas
+-- Las notas son visibles para todos en la organización
+CREATE POLICY "Todos los usuarios pueden ver todas las notas"
   ON notas_tarea
   FOR SELECT
   USING (
-    EXISTS (
-      SELECT 1 FROM tareas t
-      JOIN empleados e_creador ON e_creador.id = t.empleado_creador_id
-      WHERE t.id = notas_tarea.tarea_id
-      AND (
-        -- Usuario autenticado puede ver tareas donde es responsable, designado o creador
-        e_creador.auth_user_id = auth.uid()
-        OR EXISTS (
-          SELECT 1 FROM tareas_empleados_responsables ter
-          JOIN empleados e ON e.id = ter.empleado_id
-          WHERE ter.tarea_id = t.id AND e.auth_user_id = auth.uid()
-        )
-        OR EXISTS (
-          SELECT 1 FROM tareas_empleados_designados ted
-          JOIN empleados e ON e.id = ted.empleado_id
-          WHERE ted.tarea_id = t.id AND e.auth_user_id = auth.uid()
-        )
-      )
+    -- Cualquier usuario autenticado que sea un empleado activo puede ver las notas
+    auth.uid() IN (
+      SELECT auth_user_id FROM empleados WHERE activo = true
     )
   );
 
--- Policy: Los usuarios pueden crear notas para tareas que pueden ver
-CREATE POLICY "Los usuarios pueden crear notas para sus tareas"
+-- Policy: TODOS los usuarios autenticados pueden crear notas en cualquier tarea
+CREATE POLICY "Todos los usuarios pueden crear notas"
   ON notas_tarea
   FOR INSERT
   WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM tareas t
-      JOIN empleados e_creador ON e_creador.id = t.empleado_creador_id
-      WHERE t.id = notas_tarea.tarea_id
-      AND (
-        e_creador.auth_user_id = auth.uid()
-        OR EXISTS (
-          SELECT 1 FROM tareas_empleados_responsables ter
-          JOIN empleados e ON e.id = ter.empleado_id
-          WHERE ter.tarea_id = t.id AND e.auth_user_id = auth.uid()
-        )
-        OR EXISTS (
-          SELECT 1 FROM tareas_empleados_designados ted
-          JOIN empleados e ON e.id = ted.empleado_id
-          WHERE ted.tarea_id = t.id AND e.auth_user_id = auth.uid()
-        )
-      )
+    -- Cualquier usuario autenticado que sea un empleado activo puede crear notas
+    auth.uid() IN (
+      SELECT auth_user_id FROM empleados WHERE activo = true
     )
   );
 
--- Policy: Los usuarios pueden actualizar notas de tareas que pueden ver
-CREATE POLICY "Los usuarios pueden actualizar notas de sus tareas"
+-- Policy: TODOS los usuarios autenticados pueden actualizar cualquier nota
+CREATE POLICY "Todos los usuarios pueden actualizar notas"
   ON notas_tarea
   FOR UPDATE
   USING (
-    EXISTS (
-      SELECT 1 FROM tareas t
-      JOIN empleados e_creador ON e_creador.id = t.empleado_creador_id
-      WHERE t.id = notas_tarea.tarea_id
-      AND (
-        e_creador.auth_user_id = auth.uid()
-        OR EXISTS (
-          SELECT 1 FROM tareas_empleados_responsables ter
-          JOIN empleados e ON e.id = ter.empleado_id
-          WHERE ter.tarea_id = t.id AND e.auth_user_id = auth.uid()
-        )
-        OR EXISTS (
-          SELECT 1 FROM tareas_empleados_designados ted
-          JOIN empleados e ON e.id = ted.empleado_id
-          WHERE ted.tarea_id = t.id AND e.auth_user_id = auth.uid()
-        )
-      )
+    -- Cualquier usuario autenticado que sea un empleado activo puede actualizar notas
+    auth.uid() IN (
+      SELECT auth_user_id FROM empleados WHERE activo = true
     )
   );
 
--- Policy: Los usuarios pueden eliminar notas de tareas que pueden ver
-CREATE POLICY "Los usuarios pueden eliminar notas de sus tareas"
+-- Policy: TODOS los usuarios autenticados pueden eliminar cualquier nota
+CREATE POLICY "Todos los usuarios pueden eliminar notas"
   ON notas_tarea
   FOR DELETE
   USING (
-    EXISTS (
-      SELECT 1 FROM tareas t
-      JOIN empleados e_creador ON e_creador.id = t.empleado_creador_id
-      WHERE t.id = notas_tarea.tarea_id
-      AND (
-        e_creador.auth_user_id = auth.uid()
-        OR EXISTS (
-          SELECT 1 FROM tareas_empleados_responsables ter
-          JOIN empleados e ON e.id = ter.empleado_id
-          WHERE ter.tarea_id = t.id AND e.auth_user_id = auth.uid()
-        )
-        OR EXISTS (
-          SELECT 1 FROM tareas_empleados_designados ted
-          JOIN empleados e ON e.id = ted.empleado_id
-          WHERE ted.tarea_id = t.id AND e.auth_user_id = auth.uid()
-        )
-      )
+    -- Cualquier usuario autenticado que sea un empleado activo puede eliminar notas
+    auth.uid() IN (
+      SELECT auth_user_id FROM empleados WHERE activo = true
     )
   );
 
--- Policy para historial: Los usuarios pueden ver el historial de sus tareas
-CREATE POLICY "Los usuarios pueden ver historial de sus notas"
+-- Policy para historial: TODOS los usuarios pueden ver el historial de todas las notas
+CREATE POLICY "Todos los usuarios pueden ver historial de notas"
   ON notas_tarea_historial
   FOR SELECT
   USING (
-    EXISTS (
-      SELECT 1 FROM tareas t
-      JOIN empleados e_creador ON e_creador.id = t.empleado_creador_id
-      WHERE t.id = notas_tarea_historial.tarea_id
-      AND (
-        e_creador.auth_user_id = auth.uid()
-        OR EXISTS (
-          SELECT 1 FROM tareas_empleados_responsables ter
-          JOIN empleados e ON e.id = ter.empleado_id
-          WHERE ter.tarea_id = t.id AND e.auth_user_id = auth.uid()
-        )
-        OR EXISTS (
-          SELECT 1 FROM tareas_empleados_designados ted
-          JOIN empleados e ON e.id = ted.empleado_id
-          WHERE ted.tarea_id = t.id AND e.auth_user_id = auth.uid()
-        )
-      )
+    -- Cualquier usuario autenticado que sea un empleado activo puede ver el historial
+    auth.uid() IN (
+      SELECT auth_user_id FROM empleados WHERE activo = true
     )
   );
 

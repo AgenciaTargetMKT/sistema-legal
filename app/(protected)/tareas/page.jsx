@@ -172,15 +172,30 @@ export default function TareasPage() {
     if (esFinalizada) return false;
 
     // Filtro por vista
-    if (vistaActual === "mis-tareas" && empleado) {
-      const esMiTarea =
-        tarea.empleado_creador_id === empleado.id ||
-        tarea.empleados_responsables?.some(
-          (emp) => emp.empleado?.id === empleado.id
-        ) ||
-        tarea.empleados_designados?.some(
-          (emp) => emp.empleado?.id === empleado.id
-        );
+    if (vistaActual === "mis-tareas" && empleado?.id) {
+      // Verificar si la tarea pertenece al usuario actual
+      const esCreador = tarea.empleado_creador_id === empleado.id;
+
+      const esResponsable =
+        Array.isArray(tarea.empleados_responsables) &&
+        tarea.empleados_responsables.length > 0 &&
+        tarea.empleados_responsables.some((emp) => {
+          // Verificar múltiples formas de ID
+          const empId = emp?.empleado?.id || emp?.empleado_id;
+          return empId === empleado.id;
+        });
+
+      const esDesignado =
+        Array.isArray(tarea.empleados_designados) &&
+        tarea.empleados_designados.length > 0 &&
+        tarea.empleados_designados.some((emp) => {
+          // Verificar múltiples formas de ID
+          const empId = emp?.empleado?.id || emp?.empleado_id;
+          return empId === empleado.id;
+        });
+
+      const esMiTarea = esCreador || esResponsable || esDesignado;
+
       if (!esMiTarea) return false;
     }
 
@@ -505,20 +520,11 @@ export default function TareasPage() {
               <h3 className="text-xl font-semibold text-gray-900">
                 No tienes tareas asignadas
               </h3>
-              <p className="text-sm text-gray-500 mt-2 mb-6">
+              <p className="text-sm text-gray-500 mt-2">
                 {searchTerm
                   ? "No se encontraron tareas con ese criterio"
-                  : "Las tareas donde eres creador o responsable aparecerán aquí"}
+                  : "Las tareas donde eres creador, responsable o designado aparecerán aquí"}
               </p>
-              {!searchTerm && (
-                <Button
-                  onClick={handleNuevaTarea}
-                  className="bg-primary-600 hover:bg-primary-700"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Agregar Tarea
-                </Button>
-              )}
             </div>
           ) : (
             <TareasTable
@@ -535,20 +541,11 @@ export default function TareasPage() {
               <h3 className="text-xl font-semibold text-gray-900">
                 No hay tareas asignadas
               </h3>
-              <p className="text-sm text-gray-500 mt-2 mb-6">
+              <p className="text-sm text-gray-500 mt-2">
                 {searchTerm
                   ? "No se encontraron tareas con ese criterio"
                   : "Las tareas aparecerán organizadas por empleado"}
               </p>
-              {!searchTerm && (
-                <Button
-                  onClick={handleNuevaTarea}
-                  className="bg-primary-600 hover:bg-primary-700"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Agregar Tarea
-                </Button>
-              )}
             </div>
           ) : (
             <div className="space-y-3">

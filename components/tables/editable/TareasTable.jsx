@@ -532,16 +532,7 @@ export default function TareasTable({
   return (
     <div className="w-full space-y-3">
       {/* Controles superiores: Paginación y acciones */}
-      <div className="flex items-center justify-between">
-        {/* Botón Nueva tarea */}
-        <button
-          onClick={crearNuevaTarea}
-          className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2 shadow-sm"
-        >
-          <span className="text-lg">+</span>
-          <span>Nueva tarea</span>
-        </button>
-
+      <div className="flex items-center justify-end">
         {/* Paginación y selector de elementos */}
         {tareas.length > 0 && (
           <div className="flex items-center gap-4">
@@ -709,6 +700,19 @@ export default function TareasTable({
                 ))}
               </tbody>
             </SortableContext>
+            <tbody>
+              <tr className="border-b hover:bg-gray-50 group">
+                <td colSpan="9" className="px-3 py-2">
+                  <button
+                    onClick={crearNuevaTarea}
+                    className="w-full text-left text-sm text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-2"
+                  >
+                    <span className="text-lg">+</span>
+                    <span>Agregar tarea</span>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
           </table>
         </DndContext>
       </div>
