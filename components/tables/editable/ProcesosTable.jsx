@@ -38,6 +38,10 @@ export default function ProcesosTable({
   const [tiposProceso, setTiposProceso] = useState([]);
   const [sortConfig, setSortConfig] = useState(null);
   const [seleccionados, setSeleccionados] = useState(new Set());
+  
+  // Estados para paginación
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [elementosPorPagina, setElementosPorPagina] = useState(20);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -425,6 +429,26 @@ export default function ProcesosTable({
     }
   };
 
+  // Calcular paginación
+  const indexUltimo = paginaActual * elementosPorPagina;
+  const indexPrimero = indexUltimo - elementosPorPagina;
+  const procesosPaginados = procesos.slice(indexPrimero, indexUltimo);
+  const totalPaginas = Math.ceil(procesos.length / elementosPorPagina);
+
+  // Resetear a página 1 cuando cambian los procesos o elementos por página
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [elementosPorPagina, procesos.length]);
+
+  const cambiarPagina = (numeroPagina) => {
+    setPaginaActual(numeroPagina);
+  };
+
+  const cambiarElementosPorPagina = (cantidad) => {
+    setElementosPorPagina(cantidad);
+    setPaginaActual(1);
+  };
+
   return (
     <div className="w-full">
       {seleccionados.size > 0 && (
@@ -522,11 +546,11 @@ export default function ProcesosTable({
               </tr>
             </thead>
             <SortableContext
-              items={procesos.map((p) => p.id)}
+              items={procesosPaginados.map((p) => p.id)}
               strategy={verticalListSortingStrategy}
             >
               <tbody>
-                {procesos.map((proceso) => (
+                {procesosPaginados.map((proceso) => (
                   <SortableRow
                     key={proceso.id}
                     proceso={proceso}
@@ -559,6 +583,118 @@ export default function ProcesosTable({
           </table>
         </DndContext>
       </div>
+
+      {/* Controles de paginación */}
+      {procesos.length > 0 && (
+        <div className="mt-4 flex items-center justify-between px-4 py-3 bg-white rounded-lg shadow-sm border">
+          {/* Información de elementos */}
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-600">
+              Mostrando {indexPrimero + 1} a {Math.min(indexUltimo, procesos.length)} de {procesos.length} procesos
+            </span>
+            
+            {/* Selector de elementos por página */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Mostrar:</span>
+              <select
+                value={elementosPorPagina}
+                onChange={(e) => cambiarElementosPorPagina(Number(e.target.value))}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none"
+              >
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Botones de navegación */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => cambiarPagina(1)}
+              disabled={paginaActual === 1}
+              className={clsx(
+                "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+                paginaActual === 1
+                  ? "text-gray-400 cursor-not-allowed"
+                  : "text-gray-700 hover:bg-gray-100"
+              )}
+            >
+              Primera
+            </button>
+            
+            <button
+              onClick={() => cambiarPagina(paginaActual - 1)}
+              disabled={paginaActual === 1}
+              className={clsx(
+                "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+                paginaActual === 1
+                  ? "text-gray-400 cursor-not-allowed"
+                  : "text-gray-700 hover:bg-gray-100"
+              )}
+            >
+              Anterior
+            </button>
+
+            {/* Números de página */}
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(5, totalPaginas) }, (_, i) => {
+                let numeroPagina;
+                if (totalPaginas <= 5) {
+                  numeroPagina = i + 1;
+                } else if (paginaActual <= 3) {
+                  numeroPagina = i + 1;
+                } else if (paginaActual >= totalPaginas - 2) {
+                  numeroPagina = totalPaginas - 4 + i;
+                } else {
+                  numeroPagina = paginaActual - 2 + i;
+                }
+
+                return (
+                  <button
+                    key={numeroPagina}
+                    onClick={() => cambiarPagina(numeroPagina)}
+                    className={clsx(
+                      "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+                      paginaActual === numeroPagina
+                        ? "bg-primary-600 text-white"
+                        : "text-gray-700 hover:bg-gray-100"
+                    )}
+                  >
+                    {numeroPagina}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => cambiarPagina(paginaActual + 1)}
+              disabled={paginaActual === totalPaginas}
+              className={clsx(
+                "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+                paginaActual === totalPaginas
+                  ? "text-gray-400 cursor-not-allowed"
+                  : "text-gray-700 hover:bg-gray-100"
+              )}
+            >
+              Siguiente
+            </button>
+
+            <button
+              onClick={() => cambiarPagina(totalPaginas)}
+              disabled={paginaActual === totalPaginas}
+              className={clsx(
+                "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+                paginaActual === totalPaginas
+                  ? "text-gray-400 cursor-not-allowed"
+                  : "text-gray-700 hover:bg-gray-100"
+              )}
+            >
+              Última
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
