@@ -146,12 +146,12 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
     }
   };
 
-  // Auto-guardar cada 30 segundos
+  // Auto-guardar cada 5 segundos
   useEffect(() => {
     if (!readOnly && tareaId && empleado) {
       const interval = setInterval(() => {
         guardarNotas();
-      }, 30000); // 30 segundos
+      }, 5000); // 5 segundos
 
       return () => clearInterval(interval);
     }
@@ -184,13 +184,18 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
 
   return (
     <div className="space-y-3">
-      {/* Barra de herramientas superior */}
+      {/* Barra de estado */}
       {!readOnly && (
         <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
           <div className="flex items-center gap-2 text-xs text-gray-600">
-            {lastSaved ? (
+            {saving ? (
               <>
-                <Save className="h-3.5 w-3.5" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Guardando...</span>
+              </>
+            ) : lastSaved ? (
+              <>
+                <Save className="h-3.5 w-3.5 text-green-600" />
                 <span>Guardado {lastSaved.toLocaleTimeString("es-ES")}</span>
               </>
             ) : (
@@ -200,23 +205,6 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
               </>
             )}
           </div>
-          <button
-            onClick={guardarNotas}
-            disabled={saving}
-            className="flex items-center gap-2 px-3 py-1.5 bg-primary-600 text-white text-xs font-medium rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {saving ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Guardando...
-              </>
-            ) : (
-              <>
-                <Save className="h-3.5 w-3.5" />
-                Guardar ahora
-              </>
-            )}
-          </button>
         </div>
       )}
 
@@ -234,7 +222,7 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
       <div className="flex items-center justify-between px-3 py-2 bg-blue-50 rounded-lg border border-blue-200">
         <div className="flex items-center gap-2 text-xs text-blue-700">
           <History className="h-3.5 w-3.5" />
-          <span>Los cambios se guardan automáticamente cada 30 segundos</span>
+          <span>Los cambios se guardan automáticamente cada 5 segundos</span>
         </div>
       </div>
     </div>

@@ -73,9 +73,9 @@ const HeaderComponent = ({ onMenuClick, empleado }) => {
         initial={{ scale: 0.95 }}
         animate={{ scale: 1 }}
         transition={{ duration: 0.3, delay: 0.1 }}
-        className="flex h-16 items-center justify-end gap-4 rounded-2xl bg-white shadow-sm border border-gray-200 px-4 md:px-6"
+        className="flex h-16 items-center gap-4 rounded-2xl bg-white shadow-sm border border-gray-200 px-4 md:px-6"
       >
-        {/* Botón menú móvil */}
+        {/* Botón menú móvil - PRIMERO A LA IZQUIERDA */}
         <motion.div
           initial={{ x: -20, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
@@ -85,7 +85,7 @@ const HeaderComponent = ({ onMenuClick, empleado }) => {
             variant="ghost"
             size="icon"
             onClick={onMenuClick}
-            className="lg:hidden mr-auto"
+            className="lg:hidden"
           >
             <Menu className="h-5 w-5" />
           </Button>
@@ -96,17 +96,18 @@ const HeaderComponent = ({ onMenuClick, empleado }) => {
           initial={{ x: -20, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           transition={{ duration: 0.4, delay: 0.2 }}
-          className="hidden lg:flex flex-col mr-auto"
+          className="flex-1 flex flex-col"
         >
-          <h1 className="text-xl font-bold text-gray-900">
+          <h1 className="text-lg md:text-xl font-bold text-gray-900 truncate">
             {currentPage.title}
           </h1>
           {currentPage.description && (
-            <p className="text-sm text-gray-500">{currentPage.description}</p>
+            <p className="text-xs md:text-sm text-gray-500 truncate hidden md:block">
+              {currentPage.description}
+            </p>
           )}
         </motion.div>
-
-        {/* Barra de búsqueda */}
+        {/* Barra de búsqueda
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -122,8 +123,8 @@ const HeaderComponent = ({ onMenuClick, empleado }) => {
             />
           </div>
         </motion.div>
-
-        {/* Notificaciones */}
+        */}
+        {/* Notificaciones 
         <motion.div
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -141,7 +142,7 @@ const HeaderComponent = ({ onMenuClick, empleado }) => {
             />
           </Button>
         </motion.div>
-
+        */}
         {/* Fecha y Calendario */}
         <motion.div
           initial={{ x: 20, opacity: 0 }}
@@ -191,7 +192,6 @@ const HeaderComponent = ({ onMenuClick, empleado }) => {
             </Button>
           </motion.div>
         </motion.div>
-
         {/* Avatar del usuario */}
         <motion.div
           initial={{ x: 20, opacity: 0 }}

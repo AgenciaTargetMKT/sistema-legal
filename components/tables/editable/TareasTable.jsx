@@ -643,8 +643,8 @@ export default function TareasTable({
                   onSort={handleSort}
                   currentSort={sortConfig}
                 />
-                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 border-b border-r w-32">
-                  <div className="flex items-center gap-2 cursor-pointer">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-600 border-b border-r w-32">
+                  <div className="flex items-center gap-2">
                     <span>Estado</span>
                   </div>
                 </th>
@@ -705,10 +705,10 @@ export default function TareasTable({
                 <td colSpan="9" className="px-3 py-2">
                   <button
                     onClick={crearNuevaTarea}
-                    className="w-full text-left text-sm text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-2"
+                    className="w-full text-left text-sm font-normal text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-2"
                   >
-                    <span className="text-lg">+</span>
-                    <span>Agregar tarea</span>
+                    <span className="text-lg font-normal">+</span>
+                    <span className="font-normal">Agregar tarea</span>
                   </button>
                 </td>
               </tr>

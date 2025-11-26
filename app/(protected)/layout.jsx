@@ -68,7 +68,7 @@ export default function DashboardLayout({ children }) {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden lg:ml-24 xl:ml-24 relative z-10">
         {/* Header Component */}
         <Header onMenuClick={handleMenuClick} empleado={empleado} />
 
