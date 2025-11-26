@@ -188,3 +188,11 @@ body {
     @apply text-foreground;
   }
 }
+
+/* Ajuste dinámico del contenido según estado del sidebar */
+@media (min-width: 1280px) {
+  .sidebar-expanded ~ * [data-main-content],
+  html.sidebar-expanded [data-main-content] {
+    margin-left: 17rem !important; /* 272px - ancho expandido + margen */
+  }
+}

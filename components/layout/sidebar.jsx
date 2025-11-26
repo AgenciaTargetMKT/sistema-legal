@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState } from "react";
+import { memo, useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -71,6 +71,22 @@ const SidebarComponent = ({ empleado, onSignOut, isOpen, onClose }) => {
   const toggleMinimized = () => {
     setIsMinimized(!isMinimized);
   };
+
+  // Agregar clase al documento para ajustar el contenido
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      if (isMinimized) {
+        document.documentElement.classList.remove("sidebar-expanded");
+      } else {
+        document.documentElement.classList.add("sidebar-expanded");
+      }
+    }
+    return () => {
+      if (typeof document !== "undefined") {
+        document.documentElement.classList.remove("sidebar-expanded");
+      }
+    };
+  }, [isMinimized]);
 
   const containerVariants = {
     hidden: { opacity: 0, x: -20 },
