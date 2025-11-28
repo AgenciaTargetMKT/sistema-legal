@@ -79,32 +79,9 @@ export default function CalendarioPage() {
 
   return (
     <div className="space-y-3">
-      {/* Layout de 2 columnas */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Columna izquierda - Vista de HOY personalizada (tarjetas) */}
-        <div className="lg:col-span-3">
-          <div className="day-view-only bg-transparent border border-gray-200 rounded-lg">
-            {loading ? (
-              <div className="flex items-center justify-center h-[700px]">
-                <p className="text-sm text-gray-500">Cargando...</p>
-              </div>
-            ) : (
-              <TodayDayView
-                events={events}
-                onTimeSlotClick={handleTimeSlotClick}
-                onEventClick={handleEventClick}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Columna derecha - Vista MENSUAL CON todas las herramientas (MÁS GRANDE) */}
-        <div className="lg:col-span-9">
-          <FullCalendarWidget
-            ref={fullCalendarRef}
-            onEventUpdate={fetchEvents}
-          />
-        </div>
+      {/* Calendario completo - Ancho completo */}
+      <div className="w-full">
+        <FullCalendarWidget ref={fullCalendarRef} onEventUpdate={fetchEvents} />
       </div>
     </div>
   );

@@ -57,6 +57,7 @@ export default function ProcesosPage() {
           materia:materias(nombre),
           estado:estados_proceso(nombre, color),
           tipo_proceso:tipos_proceso(nombre),
+          lugar_data:lugar(nombre),
           empleados_asignados:proceso_empleados(
             rol,
             empleado:empleados(nombre, apellido)
@@ -87,6 +88,7 @@ export default function ProcesosPage() {
               materia:materias(nombre),
               estado:estados_proceso(nombre, color),
               tipo_proceso:tipos_proceso(nombre),
+              lugar_data:lugar(nombre),
               empleados_asignados:proceso_empleados(
                 rol,
                 empleado:empleados(nombre, apellido)

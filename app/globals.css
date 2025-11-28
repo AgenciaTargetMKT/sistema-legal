@@ -196,3 +196,60 @@ body {
     margin-left: 17rem !important; /* 272px - ancho expandido + margen */
   }
 }
+
+/* Estilos personalizados para BlockNote Editor */
+.blocknote-editor-wrapper {
+  min-height: 300px;
+}
+
+/* Mejorar la apariencia del área de drop para imágenes */
+.blocknote-editor-wrapper .bn-editor {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+}
+
+/* Estilo para cuando se arrastra una imagen sobre el editor */
+.blocknote-editor-wrapper .bn-editor[data-dragging="true"] {
+  background-color: #f0f9ff;
+  border: 2px dashed #0091ff;
+  transition: all 0.2s ease;
+}
+
+/* Mejorar el placeholder */
+.blocknote-editor-wrapper .bn-editor .bn-block-content[data-content-type="paragraph"]:empty::before {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* Estilo para los bloques de imagen */
+.blocknote-editor-wrapper .bn-file-block-content-wrapper {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Botones de la toolbar con colores personalizados */
+.blocknote-editor-wrapper .bn-toolbar-button:hover {
+  background-color: #f0f9ff;
+  color: #0091ff;
+}
+
+/* Slash menu personalizado */
+.blocknote-editor-wrapper .bn-suggestion-menu {
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.blocknote-editor-wrapper .bn-suggestion-menu-item[data-selected="true"] {
+  background-color: #f0f9ff;
+  color: #0091ff;
+}
+
+/* Mejorar el aspecto del file panel (upload/embed) */
+.blocknote-editor-wrapper .bn-file-panel {
+  border-radius: 8px;
+}
+
+.blocknote-editor-wrapper .bn-file-panel-button:hover {
+  background-color: #f0f9ff;
+  border-color: #0091ff;
+  color: #0091ff;
+}

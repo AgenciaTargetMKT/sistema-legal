@@ -69,7 +69,7 @@ export default function DashboardLayout({ children }) {
 
       {/* Main Content Area */}
       <div
-        className="flex-1 flex flex-col overflow-hidden lg:ml-24 relative z-10 transition-all duration-300"
+        className="flex-1 flex flex-col overflow-hidden lg:ml-24 relative z-0 transition-all duration-300"
         data-main-content
       >
         {/* Header Component */}

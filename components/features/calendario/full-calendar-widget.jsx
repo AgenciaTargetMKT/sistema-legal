@@ -156,8 +156,7 @@ export const FullCalendarWidget = forwardRef(function FullCalendarWidget(
         console.error("❌ Error al mover evento:", error);
         alert(`Error al mover evento: ${error.error || "Error desconocido"}`);
       } else {
-        console.log("✅ Evento movido correctamente");
-        // Recargar eventos para sincronizar
+       
         await fetchEvents();
         onEventUpdate?.();
       }
@@ -171,13 +170,6 @@ export const FullCalendarWidget = forwardRef(function FullCalendarWidget(
   const handleEventResize = async (info) => {
     try {
       const event = info.event;
-
-      console.log("📏 Redimensionando evento:", {
-        id: event.id,
-        title: event.title,
-        start: event.start,
-        end: event.end,
-      });
 
       // Actualizar duración en Google Calendar
       const response = await fetch("/api/calendar/events/update", {
@@ -207,7 +199,6 @@ export const FullCalendarWidget = forwardRef(function FullCalendarWidget(
           `Error al redimensionar evento: ${error.error || "Error desconocido"}`
         );
       } else {
-        console.log("✅ Evento redimensionado correctamente");
         // Recargar eventos para sincronizar
         await fetchEvents();
         onEventUpdate?.();

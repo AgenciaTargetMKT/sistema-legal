@@ -31,6 +31,7 @@ export default function TareasTable({
   onUpdate,
   onTareaClick,
   onTareasChange,
+  hideControls = false,
 }) {
   const [tareas, setTareas] = useState(initialTareas || []);
   const [procesos, setProcesos] = useState([]);
@@ -59,6 +60,111 @@ export default function TareasTable({
 
   useEffect(() => {
     cargarCatalogos();
+  }, []);
+
+  // Suscripción para cambios en empleados (forzar recarga de tarea afectada)
+  useEffect(() => {
+    const channel = supabase
+      .channel("tareas-table-empleados")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "tareas_empleados_designados",
+        },
+        async (payload) => {
+          console.log("👥 [TareasTable] Cambio en designados:", payload);
+          const tareaId = payload.new?.tarea_id || payload.old?.tarea_id;
+          if (tareaId) {
+            // Esperar 600ms para que la BD procese el cambio completamente
+            setTimeout(async () => {
+              const { data: tareaActualizada } = await supabase
+                .from("tareas")
+                .select(
+                  `
+                  *,
+                  proceso:procesos(id, nombre),
+                  estado:estados_tarea(id, nombre, color, categoria),
+                  cliente:clientes(id, nombre),
+                  empleados_designados:tareas_empleados_designados(empleado:empleados(id, nombre, apellido)),
+                  empleados_responsables:tareas_empleados_responsables(empleado:empleados(id, nombre, apellido))
+                `
+                )
+                .eq("id", tareaId)
+                .single();
+
+              if (tareaActualizada) {
+                console.log(
+                  "✅ [TareasTable] Tarea recargada con designados:",
+                  tareaActualizada.empleados_designados
+                );
+                setTareas((prev) => {
+                  const index = prev.findIndex((t) => t.id === tareaId);
+                  if (index === -1) return prev;
+                  const newTareas = [...prev];
+                  newTareas[index] = tareaActualizada;
+                  // Notificar cambios al padre
+                  setTimeout(() => onTareasChange?.(newTareas), 0);
+                  return newTareas;
+                });
+              }
+            }, 600);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "tareas_empleados_responsables",
+        },
+        async (payload) => {
+          console.log("👥 [TareasTable] Cambio en responsables:", payload);
+          const tareaId = payload.new?.tarea_id || payload.old?.tarea_id;
+          if (tareaId) {
+            // Esperar 600ms para sincronización completa
+            setTimeout(async () => {
+              const { data: tareaActualizada } = await supabase
+                .from("tareas")
+                .select(
+                  `
+                  *,
+                  proceso:procesos(id, nombre),
+                  estado:estados_tarea(id, nombre, color, categoria),
+                  cliente:clientes(id, nombre),
+                  empleados_designados:tareas_empleados_designados(empleado:empleados(id, nombre, apellido)),
+                  empleados_responsables:tareas_empleados_responsables(empleado:empleados(id, nombre, apellido))
+                `
+                )
+                .eq("id", tareaId)
+                .single();
+
+              if (tareaActualizada) {
+                console.log(
+                  "✅ [TareasTable] Recargando responsables para tarea:",
+                  tareaId,
+                  tareaActualizada.empleados_responsables
+                );
+                setTareas((prev) => {
+                  const index = prev.findIndex((t) => t.id === tareaId);
+                  if (index === -1) return prev;
+                  const newTareas = [...prev];
+                  newTareas[index] = tareaActualizada;
+                  setTimeout(() => onTareasChange?.(newTareas), 0);
+                  return newTareas;
+                });
+              }
+            }, 600);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Realtime subscription para tareas
@@ -118,6 +224,13 @@ export default function TareasTable({
               .single();
 
             if (tareaActualizada) {
+              console.log(
+                "🔄 [TareasTable] Tarea actualizada:",
+                tareaActualizada.id,
+                "- Designados:",
+                tareaActualizada.empleados_designados?.length || 0
+              );
+
               setTareas((prev) => {
                 const index = prev.findIndex(
                   (t) => t.id === tareaActualizada.id
@@ -534,7 +647,7 @@ export default function TareasTable({
       {/* Controles superiores: Paginación y acciones */}
       <div className="flex items-center justify-end">
         {/* Paginación y selector de elementos */}
-        {tareas.length > 0 && (
+        {!hideControls && tareas.length > 0 && (
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-600">Mostrar:</span>
@@ -673,8 +786,8 @@ export default function TareasTable({
                   currentSort={sortConfig}
                 />
                 <ColumnHeader
-                  label="Notas"
-                  columnId="notas"
+                  label="Personas Asignadas"
+                  columnId="personas_asignadas"
                   onSort={handleSort}
                   currentSort={sortConfig}
                 />
@@ -840,12 +953,11 @@ function SortableRow({
         disabled={estaFinalizada}
         onChange={(val) => actualizarCelda(tarea.id, "urgencia", val)}
       />
-      {/* Notas */}
-      <TextCell
-        value={tarea.notas}
-        onChange={(val) => actualizarCelda(tarea.id, "notas", val)}
+      {/* Personas Asignadas (Designados) - Usando EmpleadosDisplay igual que Responsables */}
+      <EmpleadosDisplay
+        empleados={tarea.empleados_designados || []}
+        onTareaClick={() => onTareaClick?.(tarea)}
         disabled={estaFinalizada}
-        className="min-w-[200px]"
       />
     </tr>
   );

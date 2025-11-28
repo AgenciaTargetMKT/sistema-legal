@@ -22,11 +22,13 @@ import {
 } from "lucide-react";
 
 const menuItems = [
+  /*
   {
     name: "Dashboard",
     href: "/home",
     icon: LayoutDashboard,
   },
+  */
   {
     name: "Calendario",
     href: "/calendario",
@@ -48,11 +50,12 @@ const menuItems = [
     href: "/tareas",
     icon: CheckSquare,
   },
+  /*
   {
     name: "Impulsos",
     href: "/impulsos",
     icon: Bell,
-  },
+  },*/
   {
     name: "Empleados",
     href: "/empleados",
@@ -113,7 +116,7 @@ const SidebarComponent = ({ empleado, onSignOut, isOpen, onClose }) => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
           onClick={onClose}
         />
       )}
@@ -121,7 +124,7 @@ const SidebarComponent = ({ empleado, onSignOut, isOpen, onClose }) => {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 transform transition-all duration-300 ease-in-out",
+          "fixed inset-y-0 left-0 z-30 transform transition-all duration-300 ease-in-out",
           // Móvil: overlay completo con ancho 64 (256px)
           "w-64",
           // Tablet (md-lg): minimizado automáticamente, ancho 20 (80px)

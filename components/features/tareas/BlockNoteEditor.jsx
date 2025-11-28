@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
+import { es } from "@blocknote/core/locales";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 import { supabase } from "@/lib/supabase";
@@ -16,6 +17,50 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
   const [notaId, setNotaId] = useState(null);
+  const [previousImageUrls, setPreviousImageUrls] = useState([]);
+
+  // Función para extraer URLs de imágenes del contenido del editor
+  const extractImageUrls = (blocks) => {
+    const urls = [];
+    const traverse = (blockArray) => {
+      blockArray.forEach((block) => {
+        if (block.type === "image" && block.props?.url) {
+          urls.push(block.props.url);
+        }
+        if (block.content && Array.isArray(block.content)) {
+          traverse(block.content);
+        }
+        if (block.children && Array.isArray(block.children)) {
+          traverse(block.children);
+        }
+      });
+    };
+    traverse(blocks);
+    return urls;
+  };
+
+  // Función para eliminar archivo de Supabase Storage
+  const deleteFileFromStorage = async (fileUrl) => {
+    try {
+      // Extraer el path del archivo desde la URL pública
+      const urlParts = fileUrl.split("/archivos-tareas/");
+      if (urlParts.length < 2) return;
+
+      const filePath = urlParts[1];
+
+      const { error } = await supabase.storage
+        .from("archivos-tareas")
+        .remove([filePath]);
+
+      if (error) {
+        console.error("Error eliminando archivo:", error);
+      } else {
+        console.log("✅ Archivo eliminado:", filePath);
+      }
+    } catch (error) {
+      console.error("Error procesando eliminación:", error);
+    }
+  };
 
   // Función para subir archivos (imágenes)
   const uploadFile = async (file) => {
@@ -48,15 +93,16 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
     }
   };
 
-  // Crear el editor con configuración inicial
+  // Crear el editor con configuración inicial y español oficial
   const editor = useCreateBlockNote({
     initialContent: [
       {
         type: "paragraph",
-        content: "Escribe tus notas aquí...",
+        content: "",
       },
     ],
-    uploadFile, // Agregar soporte para subir archivos
+    uploadFile, // Agregar soporte para subir archivos (drag & drop y paste automático)
+    dictionary: es, // Usar el diccionario español oficial de BlockNote
   });
 
   // Cargar notas desde Supabase
@@ -89,6 +135,9 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
           data.contenido.length > 0
         ) {
           editor.replaceBlocks(editor.document, data.contenido);
+          // Inicializar URLs de imágenes existentes
+          const initialUrls = extractImageUrls(data.contenido);
+          setPreviousImageUrls(initialUrls);
         }
         setLastSaved(new Date(data.updated_at));
       }
@@ -106,6 +155,25 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
     try {
       setSaving(true);
       const contenido = editor.document;
+
+      // Extraer URLs de imágenes actuales
+      const currentImageUrls = extractImageUrls(contenido);
+
+      // Detectar imágenes que fueron eliminadas
+      const deletedImages = previousImageUrls.filter(
+        (url) => !currentImageUrls.includes(url)
+      );
+
+      // Eliminar archivos huérfanos de Storage
+      if (deletedImages.length > 0) {
+        console.log("🗑️ Eliminando imágenes huérfanas:", deletedImages.length);
+        await Promise.all(
+          deletedImages.map((url) => deleteFileFromStorage(url))
+        );
+      }
+
+      // Actualizar el estado con las URLs actuales
+      setPreviousImageUrls(currentImageUrls);
 
       // Verificar si ya existe una nota
       if (notaId) {
@@ -137,7 +205,6 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
       }
 
       setLastSaved(new Date());
-      toast.success("Notas guardadas correctamente");
     } catch (error) {
       console.error("Error guardando notas:", error);
       toast.error("Error al guardar las notas: " + error.message);
@@ -184,6 +251,19 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
 
   return (
     <div className="space-y-3">
+      {/* Editor de BlockNote */}
+      <div className="blocknote-editor-wrapper rounded-lg py-4 overflow-hidden border border-gray-200 bg-white">
+        <BlockNoteView editor={editor} editable={!readOnly} theme="light" />
+      </div>
+
+      {/* Instrucciones para el usuario */}
+      {!readOnly && (
+        <div className="text-xs text-gray-500 px-3">
+          💡 <strong>Tip:</strong> Puedes arrastrar imágenes directamente al
+          editor o pegarlas con Ctrl+V / Cmd+V
+        </div>
+      )}
+
       {/* Barra de estado */}
       {!readOnly && (
         <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
@@ -207,24 +287,6 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
           </div>
         </div>
       )}
-
-      {/* Editor de BlockNote */}
-      <div className="blocknote-editor-wrapper rounded-lg border border-gray-200 overflow-hidden">
-        <BlockNoteView
-          editor={editor}
-          editable={!readOnly}
-          theme="light"
-          data-theming-css-variables-demo
-        />
-      </div>
-
-      {/* Información adicional */}
-      <div className="flex items-center justify-between px-3 py-2 bg-blue-50 rounded-lg border border-blue-200">
-        <div className="flex items-center gap-2 text-xs text-blue-700">
-          <History className="h-3.5 w-3.5" />
-          <span>Los cambios se guardan automáticamente cada 5 segundos</span>
-        </div>
-      </div>
     </div>
   );
 }

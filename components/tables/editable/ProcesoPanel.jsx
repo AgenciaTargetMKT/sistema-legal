@@ -44,6 +44,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
   const [materias, setMaterias] = useState([]);
   const [tiposProceso, setTiposProceso] = useState([]);
   const [rolesCliente, setRolesCliente] = useState([]);
+  const [lugares, setLugares] = useState([]);
 
   useEffect(() => {
     if (isOpen && proceso) {
@@ -71,23 +72,31 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
 
   const cargarCatalogos = async () => {
     try {
-      const [clientesRes, estadosRes, materiasRes, tiposRes, rolesRes] =
-        await Promise.all([
-          supabase.from("clientes").select("id, nombre").order("nombre"),
-          supabase
-            .from("estados_proceso")
-            .select("id, nombre, color")
-            .order("nombre"),
-          supabase.from("materias").select("id, nombre").order("nombre"),
-          supabase.from("tipos_proceso").select("id, nombre").order("nombre"),
-          supabase.from("roles_cliente").select("id, nombre").order("nombre"),
-        ]);
+      const [
+        clientesRes,
+        estadosRes,
+        materiasRes,
+        tiposRes,
+        rolesRes,
+        lugaresRes,
+      ] = await Promise.all([
+        supabase.from("clientes").select("id, nombre").order("nombre"),
+        supabase
+          .from("estados_proceso")
+          .select("id, nombre, color")
+          .order("nombre"),
+        supabase.from("materias").select("id, nombre").order("nombre"),
+        supabase.from("tipos_proceso").select("id, nombre").order("nombre"),
+        supabase.from("roles_cliente").select("id, nombre").order("nombre"),
+        supabase.from("lugar").select("id, nombre").order("nombre"),
+      ]);
 
       if (clientesRes.data) setClientes(clientesRes.data);
       if (estadosRes.data) setEstados(estadosRes.data);
       if (materiasRes.data) setMaterias(materiasRes.data);
       if (tiposRes.data) setTiposProceso(tiposRes.data);
       if (rolesRes.data) setRolesCliente(rolesRes.data);
+      if (lugaresRes.data) setLugares(lugaresRes.data);
     } catch (error) {
       console.error("Error cargando catálogos:", error);
     }
@@ -97,8 +106,6 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
     try {
       // Si no hay ID, es modo creación - actualizar localmente
       if (!proceso?.id) {
-       
-
         // Actualizar el campo y buscar el objeto completo si es una relación
         const updates = { [campo]: valor };
 
@@ -117,6 +124,9 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
         } else if (campo === "tipo_proceso_id" && valor) {
           const tipo = tiposProceso.find((t) => t.id === valor);
           if (tipo) updates.tipo_proceso = tipo;
+        } else if (campo === "lugar" && valor) {
+          const lugar = lugares.find((l) => l.id === valor);
+          if (lugar) updates.lugar_data = lugar;
         }
 
         setProcesoLocal((prev) => ({ ...prev, ...updates }));
@@ -145,21 +155,36 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
         return;
       }
 
+      // Limpiar valores vacíos a null para campos UUID
+      const cleanUUID = (value) => {
+        if (!value || value === "" || value === "undefined") return null;
+        return value;
+      };
+
       const nuevoProceso = {
-        nombre: procesoLocal.nombre,
-        cliente_id: procesoLocal.cliente_id || null,
-        rol_cliente_id: procesoLocal.rol_cliente_id || null,
-        materia_id: procesoLocal.materia_id || null,
-        estado_id: procesoLocal.estado_id || null,
-        tipo_proceso_id: procesoLocal.tipo_proceso_id || null,
-        contraparte: procesoLocal.contraparte || "",
-        dependencia: procesoLocal.dependencia || "",
-        pretensiones: procesoLocal.pretensiones || "",
-        lugar: procesoLocal.lugar || "",
-        ultima_actuacion_esperada: procesoLocal.ultima_actuacion_esperada || "",
+        nombre: procesoLocal.nombre?.trim() || "Sin nombre",
+        cliente_id: cleanUUID(procesoLocal.cliente_id),
+        rol_cliente_id: cleanUUID(procesoLocal.rol_cliente_id),
+        materia_id: cleanUUID(procesoLocal.materia_id),
+        estado_id: cleanUUID(procesoLocal.estado_id),
+        tipo_proceso_id: cleanUUID(procesoLocal.tipo_proceso_id),
+        contraparte: procesoLocal.contraparte?.trim() || "",
+        dependencia: procesoLocal.dependencia?.trim() || "",
+        pretensiones: procesoLocal.pretensiones?.trim() || "",
+        lugar: cleanUUID(procesoLocal.lugar), // lugar es UUID (referencia a tabla lugar)
         fecha_proximo_contacto: procesoLocal.fecha_proximo_contacto || null,
         impulso: procesoLocal.impulso || false,
       };
+
+      console.log("📋 Datos a enviar:", nuevoProceso);
+      console.log("🔍 Verificando UUIDs:", {
+        cliente_id: typeof nuevoProceso.cliente_id,
+        rol_cliente_id: typeof nuevoProceso.rol_cliente_id,
+        materia_id: typeof nuevoProceso.materia_id,
+        estado_id: typeof nuevoProceso.estado_id,
+        tipo_proceso_id: typeof nuevoProceso.tipo_proceso_id,
+        lugar: typeof nuevoProceso.lugar,
+      });
 
       const { data, error } = await supabase
         .from("procesos")
@@ -254,8 +279,6 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
           filter: `proceso_id=eq.${proceso.id}`,
         },
         async (payload) => {
-        
-
           if (payload.eventType === "INSERT") {
             // Cargar el comentario completo con la relación de empleado
             const { data } = await supabase
@@ -301,29 +324,55 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
     if (!nuevoComentario.trim() || !proceso?.id) return;
 
     try {
-      const { data: userData } = await supabase.auth.getUser();
+      // Obtener usuario autenticado
+      const { data: userData, error: userError } =
+        await supabase.auth.getUser();
+
+      if (userError) throw userError;
+      if (!userData?.user?.id) {
+        toast.error("No se pudo obtener el usuario logueado");
+        return;
+      }
+
+      console.log("👤 Usuario logueado:", userData.user.id);
 
       // Buscar el empleado asociado al usuario
-      const { data: empleadoData } = await supabase
+      const { data: empleadoData, error: empleadoError } = await supabase
         .from("empleados")
-        .select("id")
-        .eq("user_id", userData?.user?.id)
+        .select("id, nombre, apellido")
+        .eq("auth_user_id", userData.user.id)
         .single();
 
+      if (empleadoError) {
+        console.error("Error buscando empleado:", empleadoError);
+        toast.error("No se encontró el empleado asociado a tu usuario");
+        return;
+      }
+
+      if (!empleadoData?.id) {
+        toast.error("Tu usuario no está asociado a ningún empleado");
+        return;
+      }
+
+      console.log("👨‍💼 Empleado encontrado:", empleadoData);
+
+      // Insertar comentario con el empleado_id
       const { error } = await supabase.from("comentarios").insert({
         proceso_id: proceso.id,
-        empleado_id: empleadoData?.id || null,
+        empleado_id: empleadoData.id,
         contenido: nuevoComentario.trim(),
         tipo: "nota",
       });
 
       if (error) throw error;
 
+      console.log("✅ Comentario guardado correctamente");
+      toast.success("Comentario agregado");
       setNuevoComentario("");
       cargarDatos();
       onUpdate?.();
     } catch (error) {
-      console.error("Error agregando comentario:", error);
+      console.error("❌ Error agregando comentario:", error);
       toast.error("Error al agregar comentario: " + error.message);
     }
   };
@@ -338,7 +387,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
       const { data: empleadoData } = await supabase
         .from("empleados")
         .select("id")
-        .eq("user_id", userData?.user?.id)
+        .eq("auth_user_id", userData?.user?.id)
         .single();
 
       const { error } = await supabase.from("tareas").insert({
@@ -375,8 +424,6 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
           filter: `proceso_id=eq.${proceso.id}`,
         },
         async (payload) => {
-       
-
           if (payload.eventType === "INSERT") {
             const { data } = await supabase
               .from("tareas")
@@ -423,7 +470,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
 
   if (!isOpen) return null;
 
-  return (
+  const panelContent = (
     <>
       {/* Overlay con animación */}
       <AnimatePresence>
@@ -432,9 +479,8 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/40 z-[9998] transition-opacity backdrop-blur-[2px]"
             onClick={onClose}
-            style={{ left: 0, top: 0 }}
+            className="fixed inset-0 bg-black/30 z-[9998] transition-opacity backdrop-blur-[1px]"
           />
         )}
       </AnimatePresence>
@@ -589,18 +635,13 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                         }
                         multiline={true}
                       />
-                      <EditableText
-                        label="Última Actuación Esperada"
-                        value={procesoLocal?.ultima_actuacion_esperada}
-                        onUpdate={(value) =>
-                          actualizarCampo("ultima_actuacion_esperada", value)
-                        }
-                        multiline={true}
-                      />
-                      <EditableText
+                      <EditableSelect
                         label="Lugar"
                         value={procesoLocal?.lugar}
+                        options={lugares}
                         onUpdate={(value) => actualizarCampo("lugar", value)}
+                        placeholder="Selecciona un lugar"
+                        emptyMessage="No hay lugares disponibles"
                       />
                     </div>
                   </section>
@@ -882,30 +923,69 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                       </p>
                     </div>
 
-                    {/* Lista de comentarios - Scroll independiente */}
-                    <div className="flex-1 space-y-4 overflow-y-auto pr-2 max-h-[calc(100vh-300px)]">
-                      {comentarios.map((comentario) => (
-                        <div
-                          key={comentario.id}
-                          className="bg-gray-50 rounded-lg p-5 hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200"
-                        >
-                          <div className="flex items-start justify-between mb-3">
-                            <span className="text-xs text-gray-400 flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {formatearFecha(comentario.created_at)}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed mb-3">
-                            {comentario.contenido}
-                          </p>
-                          <p className="text-xs text-gray-500 font-medium flex items-center gap-1.5">
-                            <User className="w-3 h-3" />
-                            {comentario.empleado?.nombre}{" "}
-                            {comentario.empleado?.apellido || "Usuario"}
-                          </p>
+                    {/* Tabla de comentarios - Scroll independiente */}
+                    <div className="flex-1 overflow-y-auto max-h-[calc(100vh-300px)]">
+                      {comentarios.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50 sticky top-0">
+                              <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[180px]">
+                                  Fecha/Hora
+                                </th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[150px]">
+                                  Reponsable
+                                </th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Comentario
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {comentarios.map((comentario) => (
+                                <tr
+                                  key={comentario.id}
+                                  className="hover:bg-gray-50 transition-colors"
+                                >
+                                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">
+                                        {new Date(
+                                          comentario.created_at
+                                        ).toLocaleDateString("es-ES", {
+                                          day: "2-digit",
+                                          month: "2-digit",
+                                          year: "numeric",
+                                        })}
+                                      </span>
+                                      <span className="text-gray-400">
+                                        {new Date(
+                                          comentario.created_at
+                                        ).toLocaleTimeString("es-ES", {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-gray-700">
+                                    <div className="font-medium">
+                                      {comentario.empleado?.nombre}{" "}
+                                      {comentario.empleado?.apellido ||
+                                        "Usuario"}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-gray-700">
+                                    <p className="whitespace-pre-wrap break-words">
+                                      {comentario.contenido}
+                                    </p>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
-                      ))}
-                      {comentarios.length === 0 && (
+                      ) : (
                         <div className="bg-gray-50 rounded-lg p-12 text-center border-2 border-dashed border-gray-200">
                           <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                           <p className="text-sm text-gray-400 font-medium">
@@ -938,6 +1018,11 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
       />
     </>
   );
+
+  // Renderizar el panel usando portal para escapar del contexto de apilamiento
+  return typeof document !== "undefined"
+    ? createPortal(panelContent, document.body)
+    : null;
 
   // Componente de texto editable
   function EditableText({ label, value, onUpdate, multiline = false }) {
@@ -1029,7 +1114,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
     );
   }
 
-  // Componente de select editable
+  // Componente de select editable con búsqueda integrada en el input
   function EditableSelect({
     label,
     value,
@@ -1039,16 +1124,37 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
     badgeColor,
   }) {
     const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState("");
     const [referenceElement, setReferenceElement] = useState(null);
     const [popperElement, setPopperElement] = useState(null);
+    const inputRef = useRef(null);
     const { styles, attributes } = usePopper(referenceElement, popperElement, {
       placement: "bottom-start",
       strategy: "fixed",
+      modifiers: [
+        {
+          name: "offset",
+          options: {
+            offset: [0, 4],
+          },
+        },
+      ],
     });
+
+    // Filtrar opciones según el término de búsqueda
+    const opcionesFiltradas = options.filter((opt) =>
+      opt.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     const handleSelect = (option) => {
       onUpdate(option.id);
       setIsOpen(false);
+      setSearchTerm("");
+    };
+
+    const handleInputClick = () => {
+      setIsOpen(true);
+      setTimeout(() => inputRef.current?.select(), 0);
     };
 
     useEffect(() => {
@@ -1060,6 +1166,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
           !referenceElement.contains(e.target)
         ) {
           setIsOpen(false);
+          setSearchTerm("");
         }
       };
 
@@ -1073,33 +1180,34 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
     return (
       <div className="flex justify-between items-center">
         <span className="text-sm text-gray-500 font-medium">{label}</span>
-        <div
-          ref={setReferenceElement}
-          className={clsx(
-            "px-3 py-2 rounded-lg text-sm cursor-pointer transition-all flex-1 ml-4",
-            isOpen
-              ? "bg-blue-50 ring-2 ring-blue-400"
-              : "bg-white hover:bg-gray-50 border border-gray-200"
-          )}
-          onClick={() => setIsOpen(!isOpen)}
-        >
-          {value ? (
-            badge ? (
-              <span
-                className="inline-block px-2 py-1 rounded-lg text-xs font-medium"
-                style={{
-                  backgroundColor: badgeColor ? `${badgeColor}20` : "#f3f4f6",
-                  color: badgeColor || "#374151",
-                }}
-              >
-                {value}
-              </span>
-            ) : (
-              <span className="text-gray-900">{value}</span>
-            )
-          ) : (
-            <span className="text-gray-400">Seleccionar...</span>
-          )}
+        <div ref={setReferenceElement} className="flex-1 ml-4">
+          {/* Input donde se busca directamente */}
+          <input
+            ref={inputRef}
+            type="text"
+            value={isOpen ? searchTerm : value || ""}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            onClick={handleInputClick}
+            onFocus={handleInputClick}
+            placeholder="Seleccionar..."
+            className={clsx(
+              "w-full px-3 py-2 rounded-lg text-sm transition-all outline-none",
+              isOpen
+                ? "bg-blue-50 ring-2 ring-blue-400 border-transparent"
+                : "bg-white hover:bg-gray-50 border border-gray-200",
+              badge && value && !isOpen && "font-medium"
+            )}
+            style={{
+              backgroundColor:
+                badge && value && !isOpen && badgeColor
+                  ? `${badgeColor}20`
+                  : undefined,
+              color:
+                badge && value && !isOpen && badgeColor
+                  ? badgeColor
+                  : undefined,
+            }}
+          />
         </div>
 
         {isOpen &&
@@ -1109,22 +1217,28 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
               ref={setPopperElement}
               style={styles.popper}
               {...attributes.popper}
-              className="z-[11000] bg-white border-2 border-blue-400 shadow-xl rounded-lg py-1 min-w-[250px] max-h-[300px] overflow-auto"
+              className="z-[11000] bg-white border-2 border-blue-400 shadow-xl rounded-lg overflow-hidden min-w-[280px]"
             >
-              {options.map((option) => (
-                <div
-                  key={option.id}
-                  className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm transition-colors"
-                  onClick={() => handleSelect(option)}
-                >
-                  {option.nombre}
-                </div>
-              ))}
-              {options.length === 0 && (
-                <div className="px-3 py-2 text-sm text-gray-400">
-                  No hay opciones
-                </div>
-              )}
+              {/* Lista de opciones filtradas */}
+              <div className="max-h-[300px] overflow-y-auto py-1">
+                {opcionesFiltradas.length > 0 ? (
+                  opcionesFiltradas.map((option) => (
+                    <div
+                      key={option.id}
+                      className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm transition-colors"
+                      onClick={() => handleSelect(option)}
+                    >
+                      {option.nombre}
+                    </div>
+                  ))
+                ) : (
+                  <div className="px-3 py-8 text-sm text-gray-400 text-center">
+                    {searchTerm
+                      ? `No se encontró "${searchTerm}"`
+                      : "No hay opciones"}
+                  </div>
+                )}
+              </div>
             </div>,
             document.body
           )}

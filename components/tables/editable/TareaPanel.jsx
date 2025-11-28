@@ -55,6 +55,10 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
   // Estado para prefijo de tipo de tarea (VENCIMIENTO, AUDIENCIA, etc.)
   const [prefijoTarea, setPrefijoTarea] = useState("");
 
+  // Estado para filtrar procesos por cliente
+  const [clienteSeleccionadoParaFiltro, setClienteSeleccionadoParaFiltro] =
+    useState(null);
+
   // Sincronizar tareaLocal con tarea cuando cambia
   useEffect(() => {
     if (tarea?.id) {
@@ -278,6 +282,90 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
   // Los cambios se reflejan automáticamente porque `tarea` viene del padre
   // y el padre tiene su propia suscripción en TareasTable
 
+  // Función para crear cliente rápido
+  const crearClienteRapido = async (nombre) => {
+    try {
+      const { data, error } = await supabase
+        .from("clientes")
+        .insert({
+          nombre: nombre.trim(),
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast.success(`Cliente "${nombre}" creado`);
+      setClientes((prev) => [...prev, data]);
+      actualizarCampo("cliente_id", data.id);
+      return data;
+    } catch (error) {
+      console.error("Error creando cliente:", error);
+      toast.error("Error al crear cliente");
+      return null;
+    }
+  };
+
+  // Función para crear proceso rápido
+  const crearProcesoRapido = async (nombre) => {
+    try {
+      // Primero obtener la estructura de la tabla para ver qué campos tiene
+      const { data: estructuraTest } = await supabase
+        .from("procesos")
+        .select("*")
+        .limit(1);
+
+      console.log("Estructura procesos:", estructuraTest);
+
+      // Generar número de proceso temporal
+      const timestamp = Date.now();
+      const numeroTemp = `TEMP-${timestamp}`;
+
+      // Intentar con diferentes nombres de columna
+      let insertData = {
+        nombre: nombre.trim(),
+        cliente_id: datosActuales?.cliente_id || clienteSeleccionadoParaFiltro,
+      };
+
+      // Intentar agregar el número de proceso con diferentes nombres posibles
+      if (estructuraTest && estructuraTest[0]) {
+        const columnas = Object.keys(estructuraTest[0]);
+        console.log("Columnas disponibles:", columnas);
+
+        if (columnas.includes("numero_proceso")) {
+          insertData.numero_proceso = numeroTemp;
+        } else if (columnas.includes("numero")) {
+          insertData.numero = numeroTemp;
+        } else if (columnas.includes("nro_proceso")) {
+          insertData.nro_proceso = numeroTemp;
+        }
+      } else {
+        // Si no podemos verificar, intentar con el nombre estándar
+        insertData.numero_proceso = numeroTemp;
+      }
+
+      const { data, error } = await supabase
+        .from("procesos")
+        .insert(insertData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error completo:", error);
+        throw error;
+      }
+
+      toast.success(`Proceso "${nombre}" creado`);
+      setProcesos((prev) => [...prev, data]);
+      actualizarCampo("proceso_id", data.id);
+      return data;
+    } catch (error) {
+      console.error("Error creando proceso:", error);
+      toast.error(`Error: ${error.message || "No se pudo crear el proceso"}`);
+      return null;
+    }
+  };
+
   const cargarCatalogos = async () => {
     try {
       const [procesosRes, clientesRes, estadosRes, empleadosRes] =
@@ -291,7 +379,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
             .order("orden"),
           supabase
             .from("empleados")
-            .select("id, nombre, apellido")
+            .select("id, nombre, apellido, rol_id, roles_empleados(nombre)")
             .eq("activo", true)
             .order("nombre"),
         ]);
@@ -391,7 +479,18 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
 
         if (campo === "proceso_id" && valor) {
           const proceso = procesos.find((p) => p.id === valor);
-          if (proceso) updates.proceso = proceso;
+          if (proceso) {
+            updates.proceso = proceso;
+            // Auto-seleccionar el cliente del proceso
+            if (proceso.cliente_id) {
+              updates.cliente_id = proceso.cliente_id;
+              const cliente = clientes.find((c) => c.id === proceso.cliente_id);
+              if (cliente) updates.cliente = cliente;
+            }
+          }
+        } else if (campo === "cliente_id" && valor) {
+          // Cuando se selecciona un cliente, guardar para filtrar procesos
+          setClienteSeleccionadoParaFiltro(valor);
         } else if (campo === "estado_id" && valor) {
           const estado = estados.find((e) => e.id === valor);
           if (estado) updates.estado = estado;
@@ -410,6 +509,17 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
               );
             });
         } else if (campo === "empleados_responsables") {
+          // Validar que el usuario actual no sea removido
+          if (usuarioActual) {
+            const tieneUsuarioActual = valor.some(
+              (opt) => opt.value === usuarioActual.id
+            );
+            if (!tieneUsuarioActual) {
+              toast.error("No puedes eliminarte como responsable de la tarea");
+              return;
+            }
+          }
+
           // Convertir array de opciones a array de objetos empleado (solo IDs válidos)
           updates.empleados_responsables = valor
             .filter((opt) => opt.value && opt.value !== null)
@@ -438,6 +548,17 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
         campo === "empleados_designados" ||
         campo === "empleados_responsables"
       ) {
+        // Si es responsables, validar que el usuario actual no sea removido
+        if (campo === "empleados_responsables" && usuarioActual) {
+          const tieneUsuarioActual = valor.some(
+            (opt) => opt.value === usuarioActual.id
+          );
+          if (!tieneUsuarioActual) {
+            toast.error("No puedes eliminarte como responsable de la tarea");
+            return;
+          }
+        }
+
         // Filtrar empleados válidos (con ID no null/undefined)
         const empleadosValidos = valor.filter(
           (opt) => opt.value && opt.value !== null
@@ -1056,7 +1177,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
   // No renderizar si el panel está cerrado O si no hay datos
   if (!isOpen || !datosActuales) return null;
 
-  return (
+  const panelContent = (
     <>
       {/* Overlay con animación */}
       <AnimatePresence>
@@ -1066,7 +1187,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/40 z-[10998] transition-opacity backdrop-blur-[2px]"
+            className="fixed inset-0 bg-black/30 z-[9998] transition-opacity backdrop-blur-[1px]"
           />
         )}
       </AnimatePresence>
@@ -1079,10 +1200,10 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed right-0 top-0 h-full w-[900px] bg-white shadow-2xl z-[10999] overflow-y-auto"
+            className="fixed right-0 top-0 h-full w-[900px] bg-white shadow-2xl z-[9999] overflow-y-auto"
           >
             {/* Header minimalista */}
-            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-[10000]">
+            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-[9990]">
               <div className="flex-1 min-w-0 mr-4">
                 <div className="flex items-center gap-2">
                   {/* Selector de prefijo para sincronización con Google Calendar */}
@@ -1198,7 +1319,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
 
             {/* Overlay para tarea finalizada */}
             {tareaFinalizada && (
-              <div className="absolute inset-0 bg-black/50 z-[11000] flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/50 z-[9995] flex items-center justify-center">
                 <div className="text-center">
                   <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 mb-4">
                     <svg
@@ -1252,17 +1373,42 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                           }
                         : null
                     }
-                    options={procesos.map((p) => ({
+                    options={(clienteSeleccionadoParaFiltro ||
+                    datosActuales?.cliente_id
+                      ? procesos.filter(
+                          (p) =>
+                            p.cliente_id ===
+                            (clienteSeleccionadoParaFiltro ||
+                              datosActuales?.cliente_id)
+                        )
+                      : procesos
+                    ).map((p) => ({
                       value: p.id,
                       label: p.nombre,
                     }))}
                     onChange={(option) =>
                       actualizarCampo("proceso_id", option?.value || null)
                     }
-                    placeholder="Buscar proceso..."
+                    placeholder={
+                      clienteSeleccionadoParaFiltro || datosActuales?.cliente_id
+                        ? "Procesos del cliente..."
+                        : "Buscar proceso..."
+                    }
                     isClearable
                     isSearchable
-                    noOptionsMessage={() => "No se encontraron procesos"}
+                    noOptionsMessage={({ inputValue }) => {
+                      if (!inputValue) {
+                        return "Escribe para buscar o crear proceso";
+                      }
+                      return (
+                        <button
+                          onClick={() => crearProcesoRapido(inputValue)}
+                          className="w-full text-left px-3 py-2.5 text-sm text-blue-600 hover:bg-blue-50 rounded transition-colors font-medium"
+                        >
+                          + Crear proceso "{inputValue}"
+                        </button>
+                      );
+                    }}
                     styles={{
                       control: (base) => ({
                         ...base,
@@ -1276,11 +1422,14 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                         zIndex: 11002,
                         borderRadius: "12px",
                       }),
+                      noOptionsMessage: (base) => ({
+                        ...base,
+                        padding: 0,
+                      }),
                     }}
                   />
                 </div>
               </PropertyRow>
-
               <PropertyRow
                 icon={<User className="w-3.5 h-3.5" />}
                 label="Cliente"
@@ -1303,18 +1452,37 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                       value: c.id,
                       label: c.nombre,
                     }))}
-                    onChange={(option) =>
-                      actualizarCampo("cliente_id", option?.value || null)
-                    }
+                    onChange={(option) => {
+                      actualizarCampo("cliente_id", option?.value || null);
+                      // Si deselecciona cliente, limpiar filtro
+                      if (!option?.value) {
+                        setClienteSeleccionadoParaFiltro(null);
+                      }
+                    }}
                     placeholder={
                       datosActuales?.proceso_id
-                        ? "El proceso ya tiene un cliente"
+                        ? "Cliente del proceso"
                         : "Buscar cliente..."
                     }
                     isClearable={!datosActuales?.proceso_id}
                     isSearchable
                     isDisabled={!!datosActuales?.proceso_id}
-                    noOptionsMessage={() => "No se encontraron clientes"}
+                    noOptionsMessage={({ inputValue }) => {
+                      if (datosActuales?.proceso_id) {
+                        return "Cliente asignado por el proceso";
+                      }
+                      if (!inputValue) {
+                        return "Escribe para buscar o crear cliente";
+                      }
+                      return (
+                        <button
+                          onClick={() => crearClienteRapido(inputValue)}
+                          className="w-full text-left px-3 py-2.5 text-sm text-blue-600 hover:bg-blue-50 rounded transition-colors font-medium"
+                        >
+                          + Crear cliente "{inputValue}"
+                        </button>
+                      );
+                    }}
                     styles={{
                       control: (base) => ({
                         ...base,
@@ -1334,11 +1502,14 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                         zIndex: 11002,
                         borderRadius: "12px",
                       }),
+                      noOptionsMessage: (base) => ({
+                        ...base,
+                        padding: 0,
+                      }),
                     }}
                   />
                 </div>
-              </PropertyRow>
-
+              </PropertyRow>{" "}
               <PropertyRow
                 icon={<AlertCircle className="w-3.5 h-3.5" />}
                 label="Estado"
@@ -1349,7 +1520,6 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                   onUpdate={(id) => actualizarCampo("estado_id", id)}
                 />
               </PropertyRow>
-
               <PropertyRow
                 icon={<User className="w-3.5 h-3.5" />}
                 label="Designados"
@@ -1362,7 +1532,9 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                 ) : (
                   <EmpleadosBadgeSelector
                     value={datosActuales?.empleados_designados || []}
-                    options={empleados}
+                    options={empleados.filter(
+                      (e) => e.roles_empleados?.nombre === "practicante"
+                    )}
                     onUpdate={(selected) =>
                       actualizarCampo("empleados_designados", selected)
                     }
@@ -1370,7 +1542,6 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                   />
                 )}
               </PropertyRow>
-
               <PropertyRow
                 icon={<User className="w-3.5 h-3.5" />}
                 label="Responsables"
@@ -1384,7 +1555,9 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                   <div className="flex items-center gap-2">
                     <EmpleadosBadgeSelector
                       value={datosActuales?.empleados_responsables || []}
-                      options={empleados}
+                      options={empleados.filter(
+                        (e) => e.roles_empleados?.nombre === "asistente"
+                      )}
                       disabled={true}
                       placeholder="Solo lectura..."
                     />
@@ -1395,7 +1568,9 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                 ) : (
                   <EmpleadosBadgeSelector
                     value={datosActuales?.empleados_responsables || []}
-                    options={empleados}
+                    options={empleados.filter(
+                      (e) => e.roles_empleados?.nombre === "asistente"
+                    )}
                     onUpdate={(selected) =>
                       actualizarCampo("empleados_responsables", selected)
                     }
@@ -1403,7 +1578,6 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                   />
                 )}
               </PropertyRow>
-
               <PropertyRow
                 icon={<AlertCircle className="w-3.5 h-3.5" />}
                 label="Importancia"
@@ -1425,7 +1599,6 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                   onUpdate={(val) => actualizarCampo("importancia", val)}
                 />
               </PropertyRow>
-
               <PropertyRow
                 icon={<Clock className="w-3.5 h-3.5" />}
                 label="Urgencia"
@@ -1436,14 +1609,13 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                     { id: "urgente", nombre: "Urgente", color: "#F59E0B" },
                     {
                       id: "no urgente",
-                      nombre: "Normal",
+                      nombre: "No urgente",
                       color: "#3B82F6",
                     },
                   ]}
                   onUpdate={(val) => actualizarCampo("urgencia", val)}
                 />
               </PropertyRow>
-
               <PropertyRow
                 icon={<Calendar className="w-3.5 h-3.5" />}
                 label="Vencimiento"
@@ -1533,7 +1705,6 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                   )}
                 </div>
               </PropertyRow>
-
               {datosActuales?.fecha_completada && (
                 <PropertyRow
                   icon={<Calendar className="w-3.5 h-3.5" />}
@@ -1544,10 +1715,8 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                   </span>
                 </PropertyRow>
               )}
-
               {/* Divisor */}
               <div className="border-t my-4"></div>
-
               {/* Descripción */}
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -1560,7 +1729,6 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                   placeholder="Agregar descripción..."
                 />
               </div>
-
               {/* Notas - Editor Estilo Notion */}
               <div className="space-y-3 mt-6 pt-6 border-t">
                 <div className="flex items-center gap-2">
@@ -1582,7 +1750,6 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                   )}
                 </div>
               </div>
-
               {/* Notas simples (legacy - mantener para compatibilidad) */}
               <div className="space-y-2 mt-4 hidden">
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -1595,7 +1762,6 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                   placeholder="Agregar notas..."
                 />
               </div>
-
               {/* Metadatos al final */}
               {tarea?.id && (
                 <div className="mt-6 pt-4 border-t space-y-1 text-xs text-gray-500">
@@ -1615,6 +1781,11 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
       </AnimatePresence>
     </>
   );
+
+  // Renderizar usando portal para que esté fuera del contexto de apilamiento del layout
+  return typeof document !== "undefined"
+    ? createPortal(panelContent, document.body)
+    : null;
 }
 
 // Componente para selector de estado agrupado por categorías
@@ -1690,7 +1861,7 @@ function EstadoSelectGrouped({ value, estados, onUpdate }) {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute left-0 top-full mt-1 bg-white border rounded-lg shadow-xl z-[11001] w-[140px] max-h-[400px] overflow-y-auto"
+            className="absolute left-0 top-full mt-1 bg-white border rounded-lg shadow-xl z-[9980] w-[140px] max-h-[400px] overflow-y-auto"
           >
             {categorias.map((categoria) => {
               const estadosCategoria = estadosAgrupados[categoria.key];
@@ -1796,7 +1967,7 @@ function BadgeSelector({ value, options, onUpdate }) {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute left-0 top-full mt-1 bg-white border rounded-lg shadow-xl z-[11001] w-[130px] py-1"
+            className="absolute left-0 top-full mt-1 bg-white border rounded-lg shadow-xl z-[9980] w-[160px] py-1"
           >
             {options.map((option) => (
               <button

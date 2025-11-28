@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
 
 import TareasTable from "@/components/tables/editable/TareasTable";
-import TareasTableNotion from "@/components/tables/editable/TareasTableNotion";
+
 import TareaPanel from "@/components/tables/editable/TareaPanel";
 import {
   DesempenoMensualView,
@@ -59,7 +59,10 @@ export default function TareasPage() {
     cargarEmpleados();
   }, []);
 
-  // Suscripción en tiempo real para INSERT de nuevas tareas
+  // ❌ Suscripción removida - TareasTable maneja los cambios en empleados directamente
+
+  // Suscripción en tiempo real SOLO para INSERT de tareas
+  // TareasTable maneja los UPDATE para evitar conflictos
   useEffect(() => {
     const channel = supabase
       .channel("tareas-changes-page")
@@ -71,7 +74,8 @@ export default function TareasPage() {
           table: "tareas",
         },
         async (payload) => {
-          await cargarTareas();
+          console.log("➕ Nueva tarea insertada");
+          await cargarTareas(false);
         }
       )
       .subscribe();
@@ -92,18 +96,25 @@ export default function TareasPage() {
     const tareaActualizada = tareas.find((t) => t.id === tareaSeleccionada.id);
 
     if (tareaActualizada) {
-      setTareaSeleccionada(tareaActualizada);
+      // Solo actualizar si hay cambios reales en los datos
+      const hayDiferencias =
+        JSON.stringify(tareaActualizada) !== JSON.stringify(tareaSeleccionada);
+      if (hayDiferencias) {
+        setTareaSeleccionada(tareaActualizada);
+      }
     }
-  }, [tareas, panelOpen, tareaSeleccionada?.id]); // IMPORTANTE: incluir panelOpen y tareaSeleccionada?.id
+  }, [tareas, panelOpen]);
 
-  const cargarTareas = async () => {
+  const cargarTareas = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
+
       const { data, error } = await supabase
         .from("tareas")
         .select(
           `
           *,
+          empleado_creador_id,
           proceso:procesos(id, nombre),
           estado:estados_tarea(id, nombre, color, categoria),
           cliente:clientes(id, nombre),
@@ -118,12 +129,32 @@ export default function TareasPage() {
         throw error;
       }
 
+      // Debug: Verificar que los datos de empleados_designados llegan correctamente
+      if (!showLoading && data && data.length > 0) {
+        const tareasConDesignados = data.filter(
+          (t) => t.empleados_designados?.length > 0
+        );
+        console.log(
+          "📊 Actualizando tareas - Total con designados:",
+          tareasConDesignados.length
+        );
+        if (tareasConDesignados.length > 0) {
+          console.log(
+            "✅ Ejemplo de datos empleados_designados:",
+            JSON.stringify(tareasConDesignados[0].empleados_designados, null, 2)
+          );
+        }
+      }
+
       setTareas(data || []);
+      console.log("🔄 Total tareas cargadas:", data?.length || 0);
     } catch (error) {
       console.error("Error al cargar tareas:", error);
-      toast.error("Error al cargar tareas: " + error.message);
+      if (showLoading) {
+        toast.error("Error al cargar tareas: " + error.message);
+      }
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -163,7 +194,7 @@ export default function TareasPage() {
   };
 
   const handleSuccess = () => {
-    cargarTareas();
+    cargarTareas(false);
   };
 
   const tareasFiltradas = tareas.filter((tarea) => {
@@ -190,11 +221,23 @@ export default function TareasPage() {
         tarea.empleados_designados.length > 0 &&
         tarea.empleados_designados.some((emp) => {
           // Verificar múltiples formas de ID
-          const empId = emp?.empleado?.id || emp?.empleado_id;
+          const empId = emp?.empleado?.id || emp?.empleado_id || emp?.id;
           return empId === empleado.id;
         });
 
       const esMiTarea = esCreador || esResponsable || esDesignado;
+
+      // Debug: Log para verificar filtrado
+      if (!esMiTarea && tarea.empleados_designados?.length > 0) {
+        console.log("🔍 Tarea filtrada:", {
+          tareaId: tarea.id,
+          empleadoActualId: empleado.id,
+          esCreador,
+          esResponsable,
+          esDesignado,
+          empleados_designados: tarea.empleados_designados,
+        });
+      }
 
       if (!esMiTarea) return false;
     }
@@ -468,13 +511,16 @@ export default function TareasPage() {
               estadoNombre.includes("pausa") || estadoNombre.includes("pausad")
             );
           }).length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-xl shadow-sm border border-gray-200">
-              <Pause className="h-16 w-16 text-yellow-500 mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900">
+            <div className="flex flex-col items-center justify-center py-24 text-center bg-linear-to-br from-yellow-50 to-orange-50 rounded-2xl shadow-lg border border-yellow-200">
+              <div className="w-20 h-20 rounded-full bg-linear-to-br from-yellow-400 to-orange-500 flex items-center justify-center shadow-lg mb-5">
+                <Pause className="h-10 w-10 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900">
                 No hay tareas pausadas
               </h3>
-              <p className="text-sm text-gray-500 mt-2">
-                Las tareas pausadas aparecerán aquí
+              <p className="text-sm text-gray-600 mt-2 max-w-md">
+                Las tareas que se encuentren en pausa aparecerán aquí para su
+                seguimiento
               </p>
             </div>
           ) : (
@@ -494,13 +540,16 @@ export default function TareasPage() {
         ) : vistaActual === "finalizadas" ? (
           tareas.filter((t) => t.estado?.categoria === "completado").length ===
           0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-xl shadow-sm border border-gray-200">
-              <CheckCircle2 className="h-16 w-16 text-green-500 mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900">
+            <div className="flex flex-col items-center justify-center py-24 text-center bg-linear-to-br from-green-50 to-emerald-50 rounded-2xl shadow-lg border border-green-200">
+              <div className="w-20 h-20 rounded-full bg-linear-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg mb-5">
+                <CheckCircle2 className="h-10 w-10 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900">
                 No hay tareas finalizadas
               </h3>
-              <p className="text-sm text-gray-500 mt-2">
-                Las tareas completadas aparecerán aquí
+              <p className="text-sm text-gray-600 mt-2 max-w-md">
+                Las tareas completadas y finalizadas aparecerán aquí para su
+                consulta
               </p>
             </div>
           ) : (
@@ -515,14 +564,16 @@ export default function TareasPage() {
           )
         ) : vistaActual === "mis-tareas" ? (
           tareasFiltradas.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-xl shadow-sm border border-gray-200">
-              <CheckSquare className="h-16 w-16 text-gray-400 mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900">
+            <div className="flex flex-col items-center justify-center py-24 text-center bg-linear-to-br from-blue-50 to-indigo-50 rounded-2xl shadow-lg border border-blue-200">
+              <div className="w-20 h-20 rounded-full bg-linear-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg mb-5">
+                <CheckSquare className="h-10 w-10 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900">
                 No tienes tareas asignadas
               </h3>
-              <p className="text-sm text-gray-500 mt-2">
+              <p className="text-sm text-gray-600 mt-2 max-w-md">
                 {searchTerm
-                  ? "No se encontraron tareas con ese criterio"
+                  ? "No se encontraron tareas con ese criterio de búsqueda"
                   : "Las tareas donde eres creador, responsable o designado aparecerán aquí"}
               </p>
             </div>
@@ -536,19 +587,21 @@ export default function TareasPage() {
           )
         ) : vistaActual === "todas" ? (
           getEmpleadosConTareas().length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-xl shadow-sm border border-gray-200">
-              <User className="h-16 w-16 text-gray-400 mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900">
+            <div className="flex flex-col items-center justify-center py-24 text-center bg-linear-to-br from-gray-50 to-slate-50 rounded-2xl shadow-lg border border-gray-200">
+              <div className="w-20 h-20 rounded-full bg-linear-to-br from-gray-500 to-slate-600 flex items-center justify-center shadow-lg mb-5">
+                <User className="h-10 w-10 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900">
                 No hay tareas asignadas
               </h3>
-              <p className="text-sm text-gray-500 mt-2">
+              <p className="text-sm text-gray-600 mt-2 max-w-md">
                 {searchTerm
-                  ? "No se encontraron tareas con ese criterio"
-                  : "Las tareas aparecerán organizadas por empleado"}
+                  ? "No se encontraron tareas con ese criterio de búsqueda"
+                  : "Las tareas aparecerán organizadas por empleado cuando sean asignadas"}
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {getEmpleadosConTareas().map((empleado) => {
                 const tareasEmpleado = getTareasPorEmpleado(empleado.id);
                 const estaExpandido = empleadosExpandidos.has(empleado.id);
@@ -558,37 +611,42 @@ export default function TareasPage() {
                     key={empleado.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+                    className="bg-white rounded-xl shadow-md hover:shadow-lg border border-gray-200 overflow-hidden transition-shadow duration-200"
                   >
                     {/* Header del empleado - clickeable para expandir/colapsar */}
                     <button
                       onClick={() => toggleEmpleado(empleado.id)}
-                      className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors"
+                      className="w-full flex items-center justify-between px-6 py-4 hover:bg-blue-50/50 transition-all duration-200 group"
                     >
                       <div className="flex items-center gap-4">
                         <motion.div
                           animate={{ rotate: estaExpandido ? 90 : 0 }}
                           transition={{ duration: 0.2 }}
+                          className="shrink-0"
                         >
-                          <ChevronRight className="h-5 w-5 text-gray-500" />
+                          <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-primary-600 transition-colors" />
                         </motion.div>
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
-                            <User className="h-5 w-5 text-primary-600" />
+                          <div className="w-11 h-11 rounded-full bg-linear-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">
+                            <span className="text-white font-bold text-sm">
+                              {empleado.nombre?.[0]}
+                              {empleado.apellido?.[0]}
+                            </span>
                           </div>
                           <div className="text-left">
-                            <h3 className="font-semibold text-gray-900">
+                            <h3 className="font-semibold text-gray-900 text-base">
                               {empleado.nombre} {empleado.apellido}
                             </h3>
-                            <p className="text-sm text-gray-500">
+                            <p className="text-xs text-gray-500 mt-0.5">
                               {empleado.cantidadTareas} tarea
-                              {empleado.cantidadTareas !== 1 ? "s" : ""}
+                              {empleado.cantidadTareas !== 1 ? "s" : ""}{" "}
+                              asignada{empleado.cantidadTareas !== 1 ? "s" : ""}
                             </p>
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="px-3 py-1 bg-primary-50 text-primary-700 rounded-full text-sm font-medium">
+                      <div className="flex items-center gap-3">
+                        <span className="px-4 py-1.5 bg-blue-50 text-blue-700 rounded-full text-sm font-semibold border border-blue-200">
                           {empleado.cantidadTareas}
                         </span>
                       </div>
@@ -604,12 +662,13 @@ export default function TareasPage() {
                           transition={{ duration: 0.3 }}
                           className="border-t border-gray-200 overflow-hidden"
                         >
-                          <div className="p-4">
+                          <div className="p-4 bg-gray-50">
                             <TareasTable
                               tareas={tareasEmpleado}
                               onUpdate={cargarTareas}
                               onTareaClick={handleEditarTarea}
                               onTareasChange={setTareas}
+                              hideControls={true}
                             />
                           </div>
                         </motion.div>
@@ -631,12 +690,12 @@ export default function TareasPage() {
         isOpen={panelOpen}
         onClose={() => {
           setPanelOpen(false);
-          // Limpiar tareaSeleccionada después de un pequeño delay para que la animación termine
+          // Limpiar tareaSeleccionada después de un delay más largo
           setTimeout(() => {
             setTareaSeleccionada(null);
-          }, 300);
+          }, 500);
         }}
-        onUpdate={cargarTareas}
+        onUpdate={() => cargarTareas(false)}
       />
     </motion.div>
   );
