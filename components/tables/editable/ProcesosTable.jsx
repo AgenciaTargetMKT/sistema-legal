@@ -953,7 +953,7 @@ function SearchableSelectCell({
         )}
         onClick={() => setIsOpen(!isOpen)}
       >
-        <div className="flex items-center min-h-[24px]">
+        <div className="flex items-center min-h-6">
           {value ? (
             <span
               className="inline-block px-2 py-0.5 rounded text-xs font-medium transition-all truncate max-w-full"
@@ -993,7 +993,7 @@ function SearchableSelectCell({
             </div>
 
             {/* Lista de opciones */}
-            <div className="overflow-y-auto max-h-[240px]">
+            <div className="overflow-y-auto max-h-60">
               {filteredOptions.map((option) => {
                 const color = getColor ? getColor(option.nombre) : "#6B7280";
                 return (
@@ -1149,7 +1149,7 @@ function SelectCell({
             )}
 
             {/* Lista de opciones */}
-            <div className="overflow-y-auto max-h-[240px]">
+            <div className="overflow-y-auto max-h-60">
               {filteredOptions.map((option) => (
                 <div
                   key={option.id}

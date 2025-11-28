@@ -419,6 +419,77 @@ export default function TareasTable({
 
       if (error) throw error;
 
+      // Si se actualiza el nombre de la tarea, sincronizar con Google Calendar
+      if (campo === "nombre" && valor) {
+        const tarea = tareas.find((t) => t.id === tareaId);
+        const nombreAnterior = tareaOriginal?.nombre || "";
+        const nombreNuevo = valor;
+
+        // Verificar si cambió de no-sincronizable a sincronizable
+        const deberiaSincronizarAhora =
+          debeSincronizarConCalendario(nombreNuevo);
+        const sincronizabaAntes = debeSincronizarConCalendario(nombreAnterior);
+
+        if (deberiaSincronizarAhora && tarea?.fecha_vencimiento) {
+          const calendarioKey = `nombre-${tareaId}`;
+          if (!calendarioEnProgreso.current.has(calendarioKey)) {
+            calendarioEnProgreso.current.add(calendarioKey);
+
+            try {
+              const [year, month, day] = tarea.fecha_vencimiento.split("-");
+              const fechaVencimiento = new Date(
+                parseInt(year),
+                parseInt(month) - 1,
+                parseInt(day),
+                9,
+                0,
+                0
+              );
+              const fechaFin = new Date(fechaVencimiento);
+              fechaFin.setHours(10, 0, 0, 0);
+
+              // Si antes no sincronizaba, crear evento nuevo (conversión detectada)
+              if (!sincronizabaAntes) {
+                console.log(
+                  "🔄 Creando evento en Google Calendar (conversión a VENCIMIENTO/AUDIENCIA)"
+                );
+                await fetch("/api/calendar/events/create", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    title: nombreNuevo,
+                    description: tarea?.descripcion || "Tarea pendiente",
+                    start: fechaVencimiento.toISOString(),
+                    end: fechaFin.toISOString(),
+                    taskId: tareaId,
+                  }),
+                });
+              } else {
+                // Si ya sincronizaba, solo actualizar el título
+                console.log("🔄 Actualizando título en Google Calendar");
+                await fetch("/api/calendar/events/update", {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    taskId: tareaId,
+                    title: nombreNuevo,
+                  }),
+                });
+              }
+            } catch (calendarError) {
+              console.warn(
+                "Error sincronizando nombre con calendario:",
+                calendarError
+              );
+            } finally {
+              setTimeout(() => {
+                calendarioEnProgreso.current.delete(calendarioKey);
+              }, 1000);
+            }
+          }
+        }
+      }
+
       // Si se actualiza fecha_vencimiento, también actualizar Google Calendar
       if (campo === "fecha_vencimiento" && valor) {
         const tarea = tareas.find((t) => t.id === tareaId);
@@ -1024,7 +1095,7 @@ function TextCell({
           <div
             onClick={() => !disabled && setEditing(true)}
             className={clsx(
-              "flex-1 px-2 py-0.5 text-xs rounded transition-colors min-h-[24px] flex items-center",
+              "flex-1 px-2 py-0.5 text-xs rounded transition-colors min-h-6 flex items-center",
               disabled
                 ? "cursor-not-allowed text-gray-500"
                 : "hover:bg-gray-100 cursor-text"
@@ -1130,7 +1201,7 @@ function EstadoCell({
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-[9999] bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-[160px] max-h-[400px] overflow-y-auto"
+            className="z-9999 bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-40 max-h-[400px] overflow-y-auto"
           >
             {categorias.map((categoria) => {
               const estadosCategoria = estadosAgrupados[categoria.key];
@@ -1245,7 +1316,7 @@ function BadgeCell({ value, options, onChange, className, disabled = false }) {
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-[9999] bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-[180px]"
+            className="z-9999 bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-[180px]"
           >
             {options.map((option) => (
               <button
@@ -1407,7 +1478,7 @@ function SelectCell({
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-[9999] bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-[200px] max-h-[300px] overflow-y-auto"
+            className="z-9999 bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-[200px] max-h-[300px] overflow-y-auto"
           >
             {options.map((option) => (
               <button

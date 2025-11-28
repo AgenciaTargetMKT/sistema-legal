@@ -430,16 +430,17 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
   // Guardar título solo en blur o Enter
   const guardarTitulo = async () => {
     const nuevoTitulo = tituloLocal.trim();
+    const tituloAnterior = valorAnteriorTitulo.current;
 
     // Si no hay cambios, no hacer nada
-    if (nuevoTitulo === valorAnteriorTitulo.current) {
+    if (nuevoTitulo === tituloAnterior) {
       return;
     }
 
     // Validar que no esté vacío
     if (!nuevoTitulo) {
       toast.error("El título no puede estar vacío");
-      setTituloLocal(valorAnteriorTitulo.current);
+      setTituloLocal(tituloAnterior);
       return;
     }
 
@@ -453,12 +454,77 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
       if (error) {
         console.error("Error actualizando título:", error);
         toast.error("Error al guardar el título");
-        setTituloLocal(valorAnteriorTitulo.current);
+        setTituloLocal(tituloAnterior);
         return;
       }
 
       toast.success("Título actualizado");
       valorAnteriorTitulo.current = nuevoTitulo;
+
+      // Sincronizar con Google Calendar si es necesario
+      const deberiaSincronizarAhora = debeSincronizarConCalendario(nuevoTitulo);
+      const sincronizabaAntes = debeSincronizarConCalendario(tituloAnterior);
+
+      if (deberiaSincronizarAhora && tarea.fecha_vencimiento) {
+        const calendarioKey = `titulo-${tarea.id}`;
+        if (!calendarioEnProgreso.current.has(calendarioKey)) {
+          calendarioEnProgreso.current.add(calendarioKey);
+
+          try {
+            const [year, month, day] = tarea.fecha_vencimiento.split("-");
+            const fechaVencimiento = new Date(
+              parseInt(year),
+              parseInt(month) - 1,
+              parseInt(day),
+              9,
+              0,
+              0
+            );
+            const fechaFin = new Date(fechaVencimiento);
+            fechaFin.setHours(10, 0, 0, 0);
+
+            // Si antes no sincronizaba pero ahora sí (conversión a VENCIMIENTO/AUDIENCIA)
+            if (!sincronizabaAntes) {
+              console.log(
+                "🔄 Creando evento en Google Calendar (conversión detectada)"
+              );
+              await fetch("/api/calendar/events/create", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  title: nuevoTitulo,
+                  description: tarea?.descripcion || "Tarea pendiente",
+                  start: fechaVencimiento.toISOString(),
+                  end: fechaFin.toISOString(),
+                  taskId: tarea.id,
+                }),
+              });
+              toast.success("Evento creado en Google Calendar");
+            } else {
+              // Si ya sincronizaba, solo actualizar el título
+              console.log("🔄 Actualizando título en Google Calendar");
+              await fetch("/api/calendar/events/update", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  taskId: tarea.id,
+                  title: nuevoTitulo,
+                }),
+              });
+            }
+          } catch (calendarError) {
+            console.warn(
+              "⚠️ Error sincronizando título con calendario:",
+              calendarError
+            );
+          } finally {
+            setTimeout(() => {
+              calendarioEnProgreso.current.delete(calendarioKey);
+            }, 1000);
+          }
+        }
+      }
+
       onUpdate?.(); // Recargar datos
     } else {
       // Si es nueva, solo actualizar estado temporal
@@ -1187,7 +1253,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/30 z-[9998] transition-opacity backdrop-blur-[1px]"
+            className="fixed inset-0 bg-black/30 z-9998 transition-opacity backdrop-blur-[1px]"
           />
         )}
       </AnimatePresence>
@@ -1200,40 +1266,147 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed right-0 top-0 h-full w-[900px] bg-white shadow-2xl z-[9999] overflow-y-auto"
+            className="fixed right-0 top-0 h-full w-[900px] bg-white shadow-2xl z-9999 overflow-y-auto"
           >
             {/* Header minimalista */}
-            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-[9990]">
+            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-9990">
               <div className="flex-1 min-w-0 mr-4">
                 <div className="flex items-center gap-2">
                   {/* Selector de prefijo para sincronización con Google Calendar */}
                   <select
                     value={prefijoTarea}
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const nuevoPrefijo = e.target.value;
+                      const prefijoAnterior = prefijoTarea;
                       setPrefijoTarea(nuevoPrefijo);
 
-                      // Actualizar el título local para agregar/remover el prefijo
-                      if (nuevoPrefijo) {
-                        // Remover cualquier prefijo existente primero
-                        let tituloSinPrefijo = tituloLocal
-                          .replace(
-                            /^(VENCIMIENTO|AUDIENCIA|REUNIÓN|SEGUIMIENTO):\s*/i,
-                            ""
-                          )
-                          .trim();
+                      // Remover cualquier prefijo existente del título actual
+                      let tituloSinPrefijo = tituloLocal
+                        .replace(
+                          /^(VENCIMIENTO|AUDIENCIA|REUNIÓN|SEGUIMIENTO):\s*/i,
+                          ""
+                        )
+                        .trim();
 
-                        // Agregar el nuevo prefijo
-                        setTituloLocal(`${nuevoPrefijo}: ${tituloSinPrefijo}`);
-                      } else {
-                        // Remover prefijo si se selecciona "Sin prefijo"
-                        const tituloSinPrefijo = tituloLocal
-                          .replace(
-                            /^(VENCIMIENTO|AUDIENCIA|REUNIÓN|SEGUIMIENTO):\s*/i,
-                            ""
-                          )
-                          .trim();
-                        setTituloLocal(tituloSinPrefijo);
+                      // Construir el nuevo título
+                      const nuevoTitulo = nuevoPrefijo
+                        ? `${nuevoPrefijo}: ${tituloSinPrefijo}`
+                        : tituloSinPrefijo;
+
+                      // Actualizar el título local
+                      setTituloLocal(nuevoTitulo);
+
+                      // Si es una tarea existente, guardar en BD inmediatamente
+                      if (tarea?.id && nuevoTitulo.trim()) {
+                        try {
+                          const tituloAnteriorCompleto =
+                            valorAnteriorTitulo.current;
+
+                          const { error } = await supabase
+                            .from("tareas")
+                            .update({ nombre: nuevoTitulo })
+                            .eq("id", tarea.id);
+
+                          if (error) throw error;
+
+                          valorAnteriorTitulo.current = nuevoTitulo;
+                          toast.success(
+                            nuevoPrefijo
+                              ? `Prefijo "${nuevoPrefijo}" agregado`
+                              : "Prefijo eliminado"
+                          );
+
+                          // Sincronizar con Google Calendar
+                          const deberiaSincronizarAhora =
+                            debeSincronizarConCalendario(nuevoTitulo);
+                          const sincronizabaAntes =
+                            debeSincronizarConCalendario(
+                              tituloAnteriorCompleto
+                            );
+
+                          if (
+                            deberiaSincronizarAhora &&
+                            tarea.fecha_vencimiento
+                          ) {
+                            const calendarioKey = `prefijo-${tarea.id}`;
+                            if (
+                              !calendarioEnProgreso.current.has(calendarioKey)
+                            ) {
+                              calendarioEnProgreso.current.add(calendarioKey);
+
+                              try {
+                                const [year, month, day] =
+                                  tarea.fecha_vencimiento.split("-");
+                                const fechaVencimiento = new Date(
+                                  parseInt(year),
+                                  parseInt(month) - 1,
+                                  parseInt(day),
+                                  9,
+                                  0,
+                                  0
+                                );
+                                const fechaFin = new Date(fechaVencimiento);
+                                fechaFin.setHours(10, 0, 0, 0);
+
+                                if (!sincronizabaAntes) {
+                                  console.log(
+                                    "🔄 Creando evento en Google Calendar (prefijo agregado)"
+                                  );
+                                  await fetch("/api/calendar/events/create", {
+                                    method: "POST",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                      title: nuevoTitulo,
+                                      description:
+                                        tarea?.descripcion || "Tarea pendiente",
+                                      start: fechaVencimiento.toISOString(),
+                                      end: fechaFin.toISOString(),
+                                      taskId: tarea.id,
+                                    }),
+                                  });
+                                  toast.success(
+                                    "Evento creado en Google Calendar"
+                                  );
+                                } else {
+                                  console.log(
+                                    "🔄 Actualizando título en Google Calendar"
+                                  );
+                                  await fetch("/api/calendar/events/update", {
+                                    method: "PUT",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                      taskId: tarea.id,
+                                      title: nuevoTitulo,
+                                    }),
+                                  });
+                                }
+                              } catch (calendarError) {
+                                console.warn(
+                                  "⚠️ Error sincronizando con calendario:",
+                                  calendarError
+                                );
+                              } finally {
+                                setTimeout(() => {
+                                  calendarioEnProgreso.current.delete(
+                                    calendarioKey
+                                  );
+                                }, 1000);
+                              }
+                            }
+                          }
+
+                          onUpdate?.();
+                        } catch (error) {
+                          console.error("Error actualizando prefijo:", error);
+                          toast.error("Error al actualizar prefijo");
+                          // Revertir cambios
+                          setPrefijoTarea(prefijoAnterior);
+                          setTituloLocal(valorAnteriorTitulo.current);
+                        }
                       }
                     }}
                     className="px-3 py-1.5 text-sm font-medium border-2 border-gray-300 rounded-xl focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none transition-all bg-white hover:border-primary-400 cursor-pointer"
@@ -1310,7 +1483,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                 )}
                 <button
                   onClick={onClose}
-                  className="p-1.5 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
+                  className="p-1.5 hover:bg-gray-100 rounded transition-colors shrink-0"
                 >
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
@@ -1319,7 +1492,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
 
             {/* Overlay para tarea finalizada */}
             {tareaFinalizada && (
-              <div className="absolute inset-0 bg-black/50 z-[9995] flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/50 z-9995 flex items-center justify-center">
                 <div className="text-center">
                   <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 mb-4">
                     <svg
@@ -1861,7 +2034,7 @@ function EstadoSelectGrouped({ value, estados, onUpdate }) {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute left-0 top-full mt-1 bg-white border rounded-lg shadow-xl z-[9980] w-[140px] max-h-[400px] overflow-y-auto"
+            className="absolute left-0 top-full mt-1 bg-white border rounded-lg shadow-xl z-9980 w-[140px] max-h-[400px] overflow-y-auto"
           >
             {categorias.map((categoria) => {
               const estadosCategoria = estadosAgrupados[categoria.key];
@@ -1967,7 +2140,7 @@ function BadgeSelector({ value, options, onUpdate }) {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute left-0 top-full mt-1 bg-white border rounded-lg shadow-xl z-[9980] w-[160px] py-1"
+            className="absolute left-0 top-full mt-1 bg-white border rounded-lg shadow-xl z-9980 w-40 py-1"
           >
             {options.map((option) => (
               <button
@@ -2007,7 +2180,7 @@ function BadgeSelector({ value, options, onUpdate }) {
 function PropertyRow({ icon, label, children }) {
   return (
     <div className="flex items-center py-1 hover:bg-gray-50 group">
-      <div className="flex items-center gap-2 w-[140px] flex-shrink-0">
+      <div className="flex items-center gap-2 w-[140px] shrink-0">
         <span className="text-gray-400">{icon}</span>
         <span className="text-xs text-gray-600 font-medium">{label}</span>
       </div>
@@ -2318,7 +2491,7 @@ function EmpleadosBadgeSelector({
       <div
         onClick={() => !disabled && setIsOpen(!isOpen)}
         className={clsx(
-          "flex flex-wrap gap-1.5 px-2 py-1.5 rounded-lg transition-colors min-h-[32px]",
+          "flex flex-wrap gap-1.5 px-2 py-1.5 rounded-lg transition-colors min-h-8",
           disabled
             ? "cursor-not-allowed opacity-60 bg-gray-100"
             : "hover:bg-gray-50 cursor-pointer"
@@ -2369,7 +2542,7 @@ function EmpleadosBadgeSelector({
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute left-0 top-full mt-1 bg-white border rounded-xl shadow-xl z-[11001] min-w-[160px] max-h-[300px] overflow-y-auto py-1"
+            className="absolute left-0 top-full mt-1 bg-white border rounded-xl shadow-xl z-11001 min-w-40 max-h-[300px] overflow-y-auto py-1"
           >
             {options.map((empleado, index) => {
               const isSelected = value?.some((e) => {

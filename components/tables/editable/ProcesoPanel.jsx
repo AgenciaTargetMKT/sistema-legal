@@ -480,7 +480,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/30 z-[9998] transition-opacity backdrop-blur-[1px]"
+            className="fixed inset-0 bg-black/30 z-9998 transition-opacity backdrop-blur-[1px]"
           />
         )}
       </AnimatePresence>
@@ -493,10 +493,10 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed right-0 top-0 h-full w-[1200px] bg-white shadow-2xl z-[9999] overflow-y-auto"
+            className="fixed right-0 top-0 h-full w-[1200px] bg-white shadow-2xl z-9999 overflow-y-auto"
           >
             {/* Header */}
-            <div className="sticky top-0 bg-white border-b px-8 py-5 flex items-center justify-between z-[10000]">
+            <div className="sticky top-0 bg-white border-b px-8 py-5 flex items-center justify-between z-10000">
               <div className="flex-1">
                 {!proceso?.id ? (
                   <input
@@ -815,9 +815,9 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                             >
                               <div className="flex items-start gap-3">
                                 {tarea.estado?.nombre === "completada" ? (
-                                  <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                                  <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
                                 ) : (
-                                  <Circle className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                                  <Circle className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
                                 )}
                                 <div className="flex-1 min-w-0">
                                   <p
@@ -976,7 +976,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                                     </div>
                                   </td>
                                   <td className="px-4 py-3 text-sm text-gray-700">
-                                    <p className="whitespace-pre-wrap break-words">
+                                    <p className="whitespace-pre-wrap wrap-break-words">
                                       {comentario.contenido}
                                     </p>
                                   </td>
@@ -1217,7 +1217,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
               ref={setPopperElement}
               style={styles.popper}
               {...attributes.popper}
-              className="z-[11000] bg-white border-2 border-blue-400 shadow-xl rounded-lg overflow-hidden min-w-[280px]"
+              className="z-11000 bg-white border-2 border-blue-400 shadow-xl rounded-lg overflow-hidden min-w-[280px]"
             >
               {/* Lista de opciones filtradas */}
               <div className="max-h-[300px] overflow-y-auto py-1">

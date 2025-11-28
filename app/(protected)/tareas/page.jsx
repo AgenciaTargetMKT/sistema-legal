@@ -53,10 +53,12 @@ export default function TareasPage() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [empleados, setEmpleados] = useState([]);
   const [empleadosExpandidos, setEmpleadosExpandidos] = useState(new Set());
+  const [estadosTarea, setEstadosTarea] = useState([]);
 
   useEffect(() => {
     cargarTareas();
     cargarEmpleados();
+    cargarEstados();
   }, []);
 
   // ❌ Suscripción removida - TareasTable maneja los cambios en empleados directamente
@@ -125,7 +127,6 @@ export default function TareasPage() {
         .order("orden", { ascending: true });
 
       if (error) {
-        console.error("❌ Error cargando tareas:", error);
         throw error;
       }
 
@@ -134,22 +135,13 @@ export default function TareasPage() {
         const tareasConDesignados = data.filter(
           (t) => t.empleados_designados?.length > 0
         );
-        console.log(
-          "📊 Actualizando tareas - Total con designados:",
-          tareasConDesignados.length
-        );
+
         if (tareasConDesignados.length > 0) {
-          console.log(
-            "✅ Ejemplo de datos empleados_designados:",
-            JSON.stringify(tareasConDesignados[0].empleados_designados, null, 2)
-          );
         }
       }
 
       setTareas(data || []);
-      console.log("🔄 Total tareas cargadas:", data?.length || 0);
     } catch (error) {
-      console.error("Error al cargar tareas:", error);
       if (showLoading) {
         toast.error("Error al cargar tareas: " + error.message);
       }
@@ -170,6 +162,21 @@ export default function TareasPage() {
       setEmpleados(data || []);
     } catch (error) {
       console.error("Error cargando empleados:", error);
+    }
+  };
+
+  const cargarEstados = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("estados_tarea")
+        .select("id, nombre, descripcion, color, categoria")
+        .eq("activo", true)
+        .order("orden");
+
+      if (error) throw error;
+      setEstadosTarea(data || []);
+    } catch (error) {
+      console.error("Error cargando estados:", error);
     }
   };
 
@@ -229,23 +236,50 @@ export default function TareasPage() {
 
       // Debug: Log para verificar filtrado
       if (!esMiTarea && tarea.empleados_designados?.length > 0) {
-        console.log("🔍 Tarea filtrada:", {
-          tareaId: tarea.id,
-          empleadoActualId: empleado.id,
-          esCreador,
-          esResponsable,
-          esDesignado,
-          empleados_designados: tarea.empleados_designados,
-        });
       }
 
       if (!esMiTarea) return false;
     }
 
+    // Filtrar por vistas específicas
+    if (vistaActual === "proximos-5-dias") {
+      if (!tarea.fecha_vencimiento) return false;
+
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+
+      const hace5Dias = new Date();
+      hace5Dias.setDate(hace5Dias.getDate() - 5);
+      hace5Dias.setHours(0, 0, 0, 0);
+
+      const fechaVencimiento = new Date(tarea.fecha_vencimiento);
+      fechaVencimiento.setHours(0, 0, 0, 0);
+
+      const dentroDelRango =
+        fechaVencimiento >= hace5Dias && fechaVencimiento <= hoy;
+
+      if (!dentroDelRango) return false;
+    }
+
+    if (vistaActual === "retrasadas") {
+      if (!tarea.fecha_vencimiento) return false;
+
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+
+      const fechaVencimiento = new Date(tarea.fecha_vencimiento);
+      fechaVencimiento.setHours(0, 0, 0, 0);
+
+      const estaRetrasada = fechaVencimiento < hoy;
+      const noCompletada = tarea.estado?.categoria !== "completado";
+
+      if (!estaRetrasada || !noCompletada) return false;
+    }
+
     const searchLower = searchTerm.toLowerCase();
     const matchSearch =
       tarea.nombre?.toLowerCase().includes(searchLower) ||
-      tarea.proceso?.nombre?.toLowerCase().includes(searchLower) ||
+      tarea.proceso?.toLowerCase().includes(searchLower) ||
       tarea.empleados_responsables?.some(
         (emp) =>
           emp.empleado?.nombre?.toLowerCase().includes(searchLower) ||
@@ -253,8 +287,7 @@ export default function TareasPage() {
       );
 
     const matchEstado =
-      filtroEstado === "todos" ||
-      tarea.estado?.nombre?.toLowerCase() === filtroEstado.toLowerCase();
+      filtroEstado === "todos" || tarea.estado_id === filtroEstado;
 
     return matchSearch && matchEstado;
   });
@@ -391,6 +424,32 @@ export default function TareasPage() {
               Todas
             </Button>
             <Button
+              variant={vistaActual === "proximos-5-dias" ? "default" : "ghost"}
+              size="default"
+              onClick={() => setVistaActual("proximos-5-dias")}
+              className={`rounded-none px-4 whitespace-nowrap ${
+                vistaActual === "proximos-5-dias"
+                  ? "bg-linear-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-md"
+                  : ""
+              }`}
+            >
+              <Calendar className="h-4 w-4 mr-2" />
+              Hoy
+            </Button>
+            <Button
+              variant={vistaActual === "retrasadas" ? "default" : "ghost"}
+              size="default"
+              onClick={() => setVistaActual("retrasadas")}
+              className={`rounded-none px-4 whitespace-nowrap ${
+                vistaActual === "retrasadas"
+                  ? "bg-linear-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-md"
+                  : ""
+              }`}
+            >
+              <AlertCircle className="h-4 w-4 mr-2" />
+              Retrasadas
+            </Button>
+            <Button
               variant={vistaActual === "desempeno" ? "default" : "ghost"}
               size="default"
               onClick={() => setVistaActual("desempeno")}
@@ -443,16 +502,20 @@ export default function TareasPage() {
         </motion.div>
       </motion.div>
 
-      {/* Search and Filters - Solo mostrar en vista de tabla y mis tareas */}
-      {(vistaActual === "mis-tareas" || vistaActual === "todas") && (
+      {/* Search and Filters - Solo mostrar en vistas de tabla */}
+      {(vistaActual === "mis-tareas" ||
+        vistaActual === "todas" ||
+        vistaActual === "proximos-5-dias" ||
+        vistaActual === "retrasadas") && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.3 }}
           className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4"
         >
-          <div className="flex flex-col gap-3 md:flex-row md:items-center">
-            <div className="relative flex-1">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Búsqueda */}
+            <div className="relative flex-1 min-w-[250px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
                 placeholder="Buscar por título o proceso..."
@@ -462,23 +525,53 @@ export default function TareasPage() {
               />
             </div>
 
+            {/* Filtro de Estado */}
             <select
-              className="px-4 h-10 border-2 border-gray-300 rounded-xl text-sm font-medium min-w-[180px] whitespace-nowrap focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none transition-all bg-white hover:border-primary-400 cursor-pointer"
+              className="px-4 h-10 border-2 border-gray-300 rounded-xl text-sm font-medium min-w-[200px] whitespace-nowrap focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none transition-all bg-white hover:border-primary-400 cursor-pointer"
               value={filtroEstado}
               onChange={(e) => setFiltroEstado(e.target.value)}
             >
-              <option value="todos">Todos los estados</option>
-              <option value="pendiente">Pendiente</option>
-              <option value="en proceso">En Proceso</option>
-              <option value="completada">Completada</option>
+              <option value="todos">✓ Todos los estados</option>
+              {(() => {
+                const pendientes = estadosTarea.filter(
+                  (e) => e.categoria === "pendiente"
+                );
+                const enProceso = estadosTarea.filter(
+                  (e) => e.categoria === "en-proceso"
+                );
+
+                return (
+                  <>
+                    {pendientes.length > 0 && (
+                      <optgroup label="📋 Pendientes">
+                        {pendientes.map((estado) => (
+                          <option key={estado.id} value={estado.id}>
+                            {estado.descripcion || estado.nombre}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {enProceso.length > 0 && (
+                      <optgroup label="⚙️ En Proceso">
+                        {enProceso.map((estado) => (
+                          <option key={estado.id} value={estado.id}>
+                            {estado.descripcion || estado.nombre}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </>
+                );
+              })()}
             </select>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-10 w-10 rounded-xl border-2 hover:bg-primary-50 hover:border-primary-500"
-            >
-              <Filter className="h-4 w-4" />
-            </Button>
+
+            {/* Información de resultados - Ocultar en vista proximos-5-dias */}
+            {vistaActual !== "proximos-5-dias" && (
+              <div className="text-sm text-gray-600 font-medium">
+                {tareasFiltradas.length}{" "}
+                {tareasFiltradas.length === 1 ? "tarea" : "tareas"}
+              </div>
+            )}
           </div>
         </motion.div>
       )}
@@ -575,6 +668,120 @@ export default function TareasPage() {
                 {searchTerm
                   ? "No se encontraron tareas con ese criterio de búsqueda"
                   : "Las tareas donde eres creador, responsable o designado aparecerán aquí"}
+              </p>
+            </div>
+          ) : (
+            <TareasTable
+              tareas={tareasFiltradas}
+              onUpdate={cargarTareas}
+              onTareaClick={handleEditarTarea}
+              onTareasChange={setTareas}
+            />
+          )
+        ) : vistaActual === "proximos-5-dias" ? (
+          getEmpleadosConTareas().length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 text-center bg-linear-to-br from-blue-50 to-cyan-50 rounded-2xl shadow-lg border border-blue-200">
+              <div className="w-20 h-20 rounded-full bg-linear-to-br from-blue-500 to-cyan-600 flex items-center justify-center shadow-lg mb-5">
+                <Calendar className="h-10 w-10 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900">
+                No hay tareas en los últimos 5 días
+              </h3>
+              <p className="text-sm text-gray-600 mt-2 max-w-md">
+                Las tareas con vencimiento de los últimos 5 días aparecerán aquí
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {getEmpleadosConTareas().map((empleado) => {
+                const tareasEmpleado = getTareasPorEmpleado(empleado.id);
+                const estaExpandido = empleadosExpandidos.has(empleado.id);
+
+                return (
+                  <motion.div
+                    key={empleado.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white rounded-xl shadow-md hover:shadow-lg border border-gray-200 overflow-hidden transition-shadow duration-200"
+                  >
+                    {/* Header del empleado - clickeable para expandir/colapsar */}
+                    <button
+                      onClick={() => toggleEmpleado(empleado.id)}
+                      className="w-full flex items-center justify-between px-6 py-4 hover:bg-blue-50/50 transition-all duration-200 group"
+                    >
+                      <div className="flex items-center gap-4">
+                        <motion.div
+                          animate={{ rotate: estaExpandido ? 90 : 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="shrink-0"
+                        >
+                          <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-primary-600 transition-colors" />
+                        </motion.div>
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-full bg-linear-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">
+                            <span className="text-white font-bold text-sm">
+                              {empleado.nombre?.[0]}
+                              {empleado.apellido?.[0]}
+                            </span>
+                          </div>
+                          <div className="text-left">
+                            <h3 className="font-bold text-gray-900 text-base">
+                              {empleado.nombre} {empleado.apellido}
+                            </h3>
+                            <p className="text-xs text-gray-500 font-medium">
+                              {tareasEmpleado.length}{" "}
+                              {tareasEmpleado.length === 1
+                                ? "tarea asignada"
+                                : "tareas asignadas"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-full text-xs font-bold shadow-sm">
+                          {tareasEmpleado.length}
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Contenido expandible - Tabla de tareas */}
+                    <AnimatePresence>
+                      {estaExpandido && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.3, ease: "easeInOut" }}
+                          className="overflow-hidden"
+                        >
+                          <div className="border-t border-gray-200 bg-gray-50/50">
+                            <TareasTable
+                              tareas={tareasEmpleado}
+                              onUpdate={cargarTareas}
+                              onTareaClick={handleEditarTarea}
+                              onTareasChange={setTareas}
+                            />
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )
+        ) : vistaActual === "retrasadas" ? (
+          tareasFiltradas.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 text-center bg-linear-to-br from-green-50 to-emerald-50 rounded-2xl shadow-lg border border-green-200">
+              <div className="w-20 h-20 rounded-full bg-linear-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg mb-5">
+                <CheckCircle2 className="h-10 w-10 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900">
+                ¡No hay tareas retrasadas!
+              </h3>
+              <p className="text-sm text-gray-600 mt-2 max-w-md">
+                Todas las tareas están al día. Las tareas vencidas y no
+                completadas aparecerán aquí
               </p>
             </div>
           ) : (
