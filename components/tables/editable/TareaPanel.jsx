@@ -109,21 +109,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
           cliente_id: null,
           estado_id: null,
           empleados_designados: [],
-          // Establecer usuario logueado como responsable por defecto CON LOS DATOS COMPLETOS
-          empleados_responsables:
-            empleadoActualId && empleadoActualData
-              ? [
-                  {
-                    empleado_id: empleadoActualId,
-                    empleado: {
-                      id: empleadoActualData.id,
-                      nombre: empleadoActualData.nombre,
-                      apellido: empleadoActualData.apellido,
-                      email: empleadoActualData.email,
-                    },
-                  },
-                ]
-              : [],
+          empleados_responsables: [],
         });
       };
 
@@ -202,18 +188,33 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
       if (user) {
         const { data: empleado } = await supabase
           .from("empleados")
-          .select("id, nombre, apellido")
+          .select("id, nombre, apellido, roles_empleados(nombre)")
           .eq("auth_user_id", user.id)
           .single();
 
         if (empleado) {
           setUsuarioActual(empleado);
-          // Si es una nueva tarea, agregar el usuario actual como responsable por defecto
-          if (!tarea?.id && nuevaTareaTemp) {
-            setNuevaTareaTemp((prev) => ({
-              ...prev,
-              empleados_responsables: [empleado],
-            }));
+
+          // Si es una nueva tarea, configurar empleados según el rol
+          if (!tarea?.id) {
+            const esPracticante =
+              empleado.roles_empleados?.nombre === "Practicante";
+
+            if (esPracticante) {
+              // Si es practicante, agregarlo como designado pero NO como responsable
+              setNuevaTareaTemp((prev) => ({
+                ...prev,
+                empleados_designados: [empleado],
+                empleados_responsables: [], // Debe seleccionar un Asesor legal
+              }));
+            } else {
+              // Si es Asesor legal o admin, agregarlo como responsable
+              setNuevaTareaTemp((prev) => ({
+                ...prev,
+                empleados_responsables: [empleado],
+                empleados_designados: [],
+              }));
+            }
           }
         }
       }
@@ -987,6 +988,20 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
         return;
       }
 
+      // Validar que si es Practicante, debe asignar un Asesor legal como responsable
+      const esPracticante =
+        usuarioActual?.roles_empleados?.nombre === "Practicante";
+      if (
+        esPracticante &&
+        (!nuevaTareaTemp.empleados_responsables ||
+          nuevaTareaTemp.empleados_responsables.length === 0)
+      ) {
+        toast.error(
+          "Como practicante, debes asignar al menos un Asesor legal como responsable"
+        );
+        return;
+      }
+
       // Obtener el usuario actual y su empleado asociado
       const {
         data: { user },
@@ -1706,7 +1721,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                   <EmpleadosBadgeSelector
                     value={datosActuales?.empleados_designados || []}
                     options={empleados.filter(
-                      (e) => e.roles_empleados?.nombre === "practicante"
+                      (e) => e.roles_empleados?.nombre === "Practicante"
                     )}
                     onUpdate={(selected) =>
                       actualizarCampo("empleados_designados", selected)
@@ -1729,7 +1744,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                     <EmpleadosBadgeSelector
                       value={datosActuales?.empleados_responsables || []}
                       options={empleados.filter(
-                        (e) => e.roles_empleados?.nombre === "asistente"
+                        (e) => e.roles_empleados?.nombre === "Asesor legal"
                       )}
                       disabled={true}
                       placeholder="Solo lectura..."
@@ -1739,16 +1754,28 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                     </span>
                   </div>
                 ) : (
-                  <EmpleadosBadgeSelector
-                    value={datosActuales?.empleados_responsables || []}
-                    options={empleados.filter(
-                      (e) => e.roles_empleados?.nombre === "asistente"
-                    )}
-                    onUpdate={(selected) =>
-                      actualizarCampo("empleados_responsables", selected)
-                    }
-                    placeholder="Seleccionar responsables..."
-                  />
+                  <div className="space-y-1">
+                    <EmpleadosBadgeSelector
+                      value={datosActuales?.empleados_responsables || []}
+                      options={empleados.filter(
+                        (e) => e.roles_empleados?.nombre === "Asesor legal"
+                      )}
+                      onUpdate={(selected) =>
+                        actualizarCampo("empleados_responsables", selected)
+                      }
+                      placeholder="Seleccionar responsables..."
+                    />
+                    {!tarea?.id &&
+                      usuarioActual?.roles_empleados?.nombre ===
+                        "Practicante" &&
+                      (!datosActuales?.empleados_responsables ||
+                        datosActuales.empleados_responsables.length === 0) && (
+                        <div className="text-xs text-amber-600 font-medium flex items-center gap-1">
+                          ⚠️ Debes asignar al menos un Asesor legal como
+                          responsable
+                        </div>
+                      )}
+                  </div>
                 )}
               </PropertyRow>
               <PropertyRow
@@ -2067,7 +2094,8 @@ function EstadoSelectGrouped({ value, estados, onUpdate }) {
                           style={{ backgroundColor: estado.color }}
                         />
                         <span className="capitalize text-[11px]">
-                          {estado.nombre.replace(/_/g, " ")}
+                          {estado.nombre.charAt(0).toUpperCase() +
+                            estado.nombre.slice(1).replace(/_/g, " ")}
                         </span>
                       </span>
                       {value === estado.id && (

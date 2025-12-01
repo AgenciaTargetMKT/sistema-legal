@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { usePrefetchData } from "@/hooks/useQueries";
 
 export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -18,12 +19,22 @@ export default function DashboardLayout({ children }) {
   const initialize = useAuthStore((state) => state.initialize);
   const signOut = useAuthStore((state) => state.signOut);
 
+  // 🚀 Prefetch de datos comunes
+  const { prefetchAll } = usePrefetchData();
+
   // Inicializar SOLO si no está inicializado
   useEffect(() => {
     if (!initialized) {
       initialize();
     }
   }, [initialized, initialize]);
+
+  // 🚀 Prefetch cuando el usuario está autenticado
+  useEffect(() => {
+    if (initialized && user) {
+      prefetchAll();
+    }
+  }, [initialized, user, prefetchAll]);
 
   // Verificar autenticación después de inicializar
   useEffect(() => {

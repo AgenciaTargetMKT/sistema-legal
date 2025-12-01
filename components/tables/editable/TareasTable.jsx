@@ -968,7 +968,7 @@ function SortableRow({
           <GripVertical className="w-4 h-4" />
         </div>
       </td>
-      {/* Nombre con icono de abrir panel */}
+      {/* Nombre */}
       <TextCell
         value={tarea.nombre}
         onChange={(val) => actualizarCelda(tarea.id, "nombre", val)}
@@ -976,10 +976,11 @@ function SortableRow({
         iconButton={
           <button
             onClick={() => onTareaClick?.(tarea)}
-            className="text-gray-300 hover:text-primary-600 transition-colors opacity-0 group-hover:opacity-100"
-            title="Abrir panel"
+            className="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-gray-500 hover:text-primary-600 hover:bg-gray-50 rounded transition-colors"
+            title="Abrir panel de detalles"
           >
             <PanelRightOpen className="h-3.5 w-3.5" />
+            <span>Abrir</span>
           </button>
         }
       />
@@ -1080,7 +1081,6 @@ function TextCell({
   return (
     <td className={clsx("px-3 py-1.5 border-r group relative", className)}>
       <div className="flex items-center gap-2 min-w-[200px]">
-        {iconButton}
         {editing ? (
           <input
             ref={inputRef}
@@ -1104,6 +1104,7 @@ function TextCell({
             {currentValue || <span className="text-gray-400">Vacío</span>}
           </div>
         )}
+        {iconButton}
       </div>
     </td>
   );
@@ -1187,7 +1188,8 @@ function EstadoCell({
               className="w-2 h-2 rounded-full shrink-0"
               style={{ backgroundColor: estadoActual.color }}
             />
-            {estadoActual.nombre.replace(/_/g, " ")}
+            {estadoActual.nombre.charAt(0).toUpperCase() +
+              estadoActual.nombre.slice(1).replace(/_/g, " ")}
           </span>
         ) : (
           <span className="text-xs text-gray-400 px-2 py-1">Seleccionar</span>
@@ -1232,7 +1234,8 @@ function EstadoCell({
                           className="w-2 h-2 rounded-full shrink-0"
                           style={{ backgroundColor: estado.color }}
                         />
-                        {estado.nombre.replace(/_/g, " ")}
+                        {estado.nombre.charAt(0).toUpperCase() +
+                          estado.nombre.slice(1).replace(/_/g, " ")}
                       </span>
                     </button>
                   ))}

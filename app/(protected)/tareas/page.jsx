@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
+import { useState, useEffect, useMemo } from "react";
 import { formatearFecha, estaVencido } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
+import { useTareas, useEmpleados, useEstadosTarea } from "@/hooks/useTareas";
 
 import TareasTable from "@/components/tables/editable/TareasTable";
 
@@ -43,142 +43,35 @@ import {
 
 export default function TareasPage() {
   const { empleado } = useAuth();
-  const [tareas, setTareas] = useState([]);
-  const [loading, setLoading] = useState(true);
+
+  // 🔥 HOOKS OPTIMIZADOS: Caché + Realtime
+  const { data: tareas = [], isLoading: loading, refetch } = useTareas();
+  const { data: empleados = [] } = useEmpleados();
+  const { data: estadosTarea = [] } = useEstadosTarea();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("todos");
+  const [filtroImportancia, setFiltroImportancia] = useState("todos");
+  const [filtroUrgencia, setFiltroUrgencia] = useState("todos");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [tareaSeleccionada, setTareaSeleccionada] = useState(null);
   const [vistaActual, setVistaActual] = useState("mis-tareas");
   const [panelOpen, setPanelOpen] = useState(false);
-  const [empleados, setEmpleados] = useState([]);
   const [empleadosExpandidos, setEmpleadosExpandidos] = useState(new Set());
-  const [estadosTarea, setEstadosTarea] = useState([]);
-
-  useEffect(() => {
-    cargarTareas();
-    cargarEmpleados();
-    cargarEstados();
-  }, []);
-
-  // ❌ Suscripción removida - TareasTable maneja los cambios en empleados directamente
-
-  // Suscripción en tiempo real SOLO para INSERT de tareas
-  // TareasTable maneja los UPDATE para evitar conflictos
-  useEffect(() => {
-    const channel = supabase
-      .channel("tareas-changes-page")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "tareas",
-        },
-        async (payload) => {
-          console.log("➕ Nueva tarea insertada");
-          await cargarTareas(false);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
 
   // Sincronizar tareaSeleccionada cuando la tabla se actualiza
-  // SOLO si el panel está abierto Y hay una tarea seleccionada (no nueva tarea)
   useEffect(() => {
-    // No sincronizar si el panel está cerrado o es una nueva tarea (tareaSeleccionada es null)
-    if (!panelOpen || !tareaSeleccionada?.id) {
-      return;
-    }
+    if (!panelOpen || !tareaSeleccionada?.id) return;
 
     const tareaActualizada = tareas.find((t) => t.id === tareaSeleccionada.id);
-
     if (tareaActualizada) {
-      // Solo actualizar si hay cambios reales en los datos
       const hayDiferencias =
         JSON.stringify(tareaActualizada) !== JSON.stringify(tareaSeleccionada);
       if (hayDiferencias) {
         setTareaSeleccionada(tareaActualizada);
       }
     }
-  }, [tareas, panelOpen]);
-
-  const cargarTareas = async (showLoading = true) => {
-    try {
-      if (showLoading) setLoading(true);
-
-      const { data, error } = await supabase
-        .from("tareas")
-        .select(
-          `
-          *,
-          empleado_creador_id,
-          proceso:procesos(id, nombre),
-          estado:estados_tarea(id, nombre, color, categoria),
-          cliente:clientes(id, nombre),
-          empleados_designados:tareas_empleados_designados(empleado:empleados(id, nombre, apellido)),
-          empleados_responsables:tareas_empleados_responsables(empleado:empleados(id, nombre, apellido))
-        `
-        )
-        .order("orden", { ascending: true });
-
-      if (error) {
-        throw error;
-      }
-
-      // Debug: Verificar que los datos de empleados_designados llegan correctamente
-      if (!showLoading && data && data.length > 0) {
-        const tareasConDesignados = data.filter(
-          (t) => t.empleados_designados?.length > 0
-        );
-
-        if (tareasConDesignados.length > 0) {
-        }
-      }
-
-      setTareas(data || []);
-    } catch (error) {
-      if (showLoading) {
-        toast.error("Error al cargar tareas: " + error.message);
-      }
-    } finally {
-      if (showLoading) setLoading(false);
-    }
-  };
-
-  const cargarEmpleados = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("empleados")
-        .select("id, nombre, apellido")
-        .eq("activo", true)
-        .order("nombre");
-
-      if (error) throw error;
-      setEmpleados(data || []);
-    } catch (error) {
-      console.error("Error cargando empleados:", error);
-    }
-  };
-
-  const cargarEstados = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("estados_tarea")
-        .select("id, nombre, descripcion, color, categoria")
-        .eq("activo", true)
-        .order("orden");
-
-      if (error) throw error;
-      setEstadosTarea(data || []);
-    } catch (error) {
-      console.error("Error cargando estados:", error);
-    }
-  };
+  }, [tareas, panelOpen, tareaSeleccionada]);
 
   const handleNuevaTarea = () => {
     if (panelOpen) {
@@ -201,96 +94,117 @@ export default function TareasPage() {
   };
 
   const handleSuccess = () => {
-    cargarTareas(false);
+    refetch();
   };
 
-  const tareasFiltradas = tareas.filter((tarea) => {
-    // 🚫 Filtrar tareas finalizadas (no mostrar en tabla principal)
-    const esFinalizada = tarea.estado?.categoria === "completado";
-    if (esFinalizada) return false;
+  // 🚀 MEMOIZAR FILTRADO DE TAREAS (optimización)
+  const tareasFiltradas = useMemo(() => {
+    return tareas.filter((tarea) => {
+      // 🚫 Filtrar tareas finalizadas (no mostrar en tabla principal)
+      const esFinalizada = tarea.estado?.categoria === "completado";
+      if (esFinalizada) return false;
 
-    // Filtro por vista
-    if (vistaActual === "mis-tareas" && empleado?.id) {
-      // Verificar si la tarea pertenece al usuario actual
-      const esCreador = tarea.empleado_creador_id === empleado.id;
+      // Filtro por vista
+      if (vistaActual === "mis-tareas" && empleado?.id) {
+        // Verificar si la tarea pertenece al usuario actual
+        const esCreador = tarea.empleado_creador_id === empleado.id;
 
-      const esResponsable =
-        Array.isArray(tarea.empleados_responsables) &&
-        tarea.empleados_responsables.length > 0 &&
-        tarea.empleados_responsables.some((emp) => {
-          // Verificar múltiples formas de ID
-          const empId = emp?.empleado?.id || emp?.empleado_id;
-          return empId === empleado.id;
-        });
+        const esResponsable =
+          Array.isArray(tarea.empleados_responsables) &&
+          tarea.empleados_responsables.length > 0 &&
+          tarea.empleados_responsables.some((emp) => {
+            // Verificar múltiples formas de ID
+            const empId = emp?.empleado?.id || emp?.empleado_id;
+            return empId === empleado.id;
+          });
 
-      const esDesignado =
-        Array.isArray(tarea.empleados_designados) &&
-        tarea.empleados_designados.length > 0 &&
-        tarea.empleados_designados.some((emp) => {
-          // Verificar múltiples formas de ID
-          const empId = emp?.empleado?.id || emp?.empleado_id || emp?.id;
-          return empId === empleado.id;
-        });
+        const esDesignado =
+          Array.isArray(tarea.empleados_designados) &&
+          tarea.empleados_designados.length > 0 &&
+          tarea.empleados_designados.some((emp) => {
+            // Verificar múltiples formas de ID
+            const empId = emp?.empleado?.id || emp?.empleado_id || emp?.id;
+            return empId === empleado.id;
+          });
 
-      const esMiTarea = esCreador || esResponsable || esDesignado;
+        const esMiTarea = esCreador || esResponsable || esDesignado;
 
-      // Debug: Log para verificar filtrado
-      if (!esMiTarea && tarea.empleados_designados?.length > 0) {
+        // Debug: Log para verificar filtrado
+        if (!esMiTarea && tarea.empleados_designados?.length > 0) {
+        }
+
+        if (!esMiTarea) return false;
       }
 
-      if (!esMiTarea) return false;
-    }
+      // Filtrar por vistas específicas
+      if (vistaActual === "proximos-5-dias") {
+        if (!tarea.fecha_vencimiento) return false;
 
-    // Filtrar por vistas específicas
-    if (vistaActual === "proximos-5-dias") {
-      if (!tarea.fecha_vencimiento) return false;
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
 
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
+        const hace5Dias = new Date();
+        hace5Dias.setDate(hace5Dias.getDate() - 5);
+        hace5Dias.setHours(0, 0, 0, 0);
 
-      const hace5Dias = new Date();
-      hace5Dias.setDate(hace5Dias.getDate() - 5);
-      hace5Dias.setHours(0, 0, 0, 0);
+        const fechaVencimiento = new Date(tarea.fecha_vencimiento);
+        fechaVencimiento.setHours(0, 0, 0, 0);
 
-      const fechaVencimiento = new Date(tarea.fecha_vencimiento);
-      fechaVencimiento.setHours(0, 0, 0, 0);
+        const dentroDelRango =
+          fechaVencimiento >= hace5Dias && fechaVencimiento <= hoy;
 
-      const dentroDelRango =
-        fechaVencimiento >= hace5Dias && fechaVencimiento <= hoy;
+        if (!dentroDelRango) return false;
+      }
 
-      if (!dentroDelRango) return false;
-    }
+      if (vistaActual === "retrasadas") {
+        if (!tarea.fecha_vencimiento) return false;
 
-    if (vistaActual === "retrasadas") {
-      if (!tarea.fecha_vencimiento) return false;
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
 
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
+        const fechaVencimiento = new Date(tarea.fecha_vencimiento);
+        fechaVencimiento.setHours(0, 0, 0, 0);
 
-      const fechaVencimiento = new Date(tarea.fecha_vencimiento);
-      fechaVencimiento.setHours(0, 0, 0, 0);
+        const estaRetrasada = fechaVencimiento < hoy;
+        const noCompletada = tarea.estado?.categoria !== "completado";
 
-      const estaRetrasada = fechaVencimiento < hoy;
-      const noCompletada = tarea.estado?.categoria !== "completado";
+        if (!estaRetrasada || !noCompletada) return false;
+      }
 
-      if (!estaRetrasada || !noCompletada) return false;
-    }
+      const searchLower = searchTerm.toLowerCase();
+      const matchSearch =
+        tarea.nombre?.toLowerCase().includes(searchLower) ||
+        tarea.proceso?.toLowerCase().includes(searchLower) ||
+        tarea.empleados_responsables?.some(
+          (emp) =>
+            emp.empleado?.nombre?.toLowerCase().includes(searchLower) ||
+            emp.empleado?.apellido?.toLowerCase().includes(searchLower)
+        );
 
-    const searchLower = searchTerm.toLowerCase();
-    const matchSearch =
-      tarea.nombre?.toLowerCase().includes(searchLower) ||
-      tarea.proceso?.toLowerCase().includes(searchLower) ||
-      tarea.empleados_responsables?.some(
-        (emp) =>
-          emp.empleado?.nombre?.toLowerCase().includes(searchLower) ||
-          emp.empleado?.apellido?.toLowerCase().includes(searchLower)
-      );
+      const matchEstado =
+        filtroEstado === "todos" || tarea.estado_id === filtroEstado;
 
-    const matchEstado =
-      filtroEstado === "todos" || tarea.estado_id === filtroEstado;
+      // Filtro por Importancia
+      const matchImportancia =
+        filtroImportancia === "todos" ||
+        tarea.importancia?.toLowerCase() === filtroImportancia.toLowerCase();
 
-    return matchSearch && matchEstado;
-  });
+      // Filtro por Urgencia
+      const matchUrgencia =
+        filtroUrgencia === "todos" ||
+        tarea.urgencia?.toLowerCase() === filtroUrgencia.toLowerCase();
+
+      return matchSearch && matchEstado && matchImportancia && matchUrgencia;
+    });
+  }, [
+    tareas,
+    vistaActual,
+    empleado,
+    searchTerm,
+    filtroEstado,
+    filtroImportancia,
+    filtroUrgencia,
+  ]);
 
   // Función para toggle expandir/colapsar empleado
   const toggleEmpleado = (empleadoId) => {
@@ -531,38 +445,76 @@ export default function TareasPage() {
               value={filtroEstado}
               onChange={(e) => setFiltroEstado(e.target.value)}
             >
-              <option value="todos">✓ Todos los estados</option>
+              <option value="todos">Todos los estados</option>
               {(() => {
-                const pendientes = estadosTarea.filter(
-                  (e) => e.categoria === "pendiente"
-                );
-                const enProceso = estadosTarea.filter(
-                  (e) => e.categoria === "en-proceso"
+                // Agrupar estados por su categoría
+                const categorias = estadosTarea.reduce((acc, estado) => {
+                  const cat = estado.categoria || "sin-categoria";
+                  if (!acc[cat]) acc[cat] = [];
+                  acc[cat].push(estado);
+                  return acc;
+                }, {});
+
+                // Mapeo de categorías a etiquetas
+                const categoriasConfig = {
+                  pendiente: { label: "Pendientes", orden: 1 },
+                  "en-proceso": { label: "En proceso", orden: 2 },
+                  pausado: { label: "Pausadas", orden: 3 },
+                  completado: { label: "Completadas", orden: 4 },
+                  importante: { label: "Importante", orden: 5 },
+                  urgente: { label: "Urgente", orden: 6 },
+                  "no-urgente": { label: "No urgente", orden: 7 },
+                  "sin-categoria": { label: "Otros", orden: 99 },
+                };
+
+                // Ordenar categorías
+                const categoriasOrdenadas = Object.entries(categorias).sort(
+                  ([catA], [catB]) => {
+                    const ordenA = categoriasConfig[catA]?.orden || 99;
+                    const ordenB = categoriasConfig[catB]?.orden || 99;
+                    return ordenA - ordenB;
+                  }
                 );
 
-                return (
-                  <>
-                    {pendientes.length > 0 && (
-                      <optgroup label="📋 Pendientes">
-                        {pendientes.map((estado) => (
+                return categoriasOrdenadas.map(([categoria, estados]) => {
+                  const config = categoriasConfig[categoria] || {
+                    label: categoria,
+                  };
+                  return (
+                    <optgroup key={categoria} label={config.label}>
+                      {estados
+                        .sort((a, b) => (a.orden || 0) - (b.orden || 0))
+                        .map((estado) => (
                           <option key={estado.id} value={estado.id}>
                             {estado.descripcion || estado.nombre}
                           </option>
                         ))}
-                      </optgroup>
-                    )}
-                    {enProceso.length > 0 && (
-                      <optgroup label="⚙️ En Proceso">
-                        {enProceso.map((estado) => (
-                          <option key={estado.id} value={estado.id}>
-                            {estado.descripcion || estado.nombre}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                  </>
-                );
+                    </optgroup>
+                  );
+                });
               })()}
+            </select>
+
+            {/* Filtro de Importancia */}
+            <select
+              className="px-4 h-10 border-2 border-gray-300 rounded-xl text-sm font-medium min-w-[180px] whitespace-nowrap focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none transition-all bg-white hover:border-primary-400 cursor-pointer"
+              value={filtroImportancia}
+              onChange={(e) => setFiltroImportancia(e.target.value)}
+            >
+              <option value="todos">Importancia</option>
+              <option value="importante">Importante</option>
+              <option value="no importante">No importante</option>
+            </select>
+
+            {/* Filtro de Urgencia */}
+            <select
+              className="px-4 h-10 border-2 border-gray-300 rounded-xl text-sm font-medium min-w-[180px] whitespace-nowrap focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none transition-all bg-white hover:border-primary-400 cursor-pointer"
+              value={filtroUrgencia}
+              onChange={(e) => setFiltroUrgencia(e.target.value)}
+            >
+              <option value="todos">Urgencia</option>
+              <option value="urgente">Urgente</option>
+              <option value="no urgente">No urgente</option>
             </select>
 
             {/* Información de resultados - Ocultar en vista proximos-5-dias */}
@@ -625,9 +577,8 @@ export default function TareasPage() {
                   estadoNombre.includes("pausad")
                 );
               })}
-              onUpdate={cargarTareas}
+              onUpdate={refetch}
               onTareaClick={handleEditarTarea}
-              onTareasChange={setTareas}
             />
           )
         ) : vistaActual === "finalizadas" ? (
@@ -650,9 +601,8 @@ export default function TareasPage() {
               tareas={tareas.filter(
                 (t) => t.estado?.categoria === "completado"
               )}
-              onUpdate={cargarTareas}
+              onUpdate={refetch}
               onTareaClick={handleEditarTarea}
-              onTareasChange={setTareas}
             />
           )
         ) : vistaActual === "mis-tareas" ? (
@@ -673,9 +623,8 @@ export default function TareasPage() {
           ) : (
             <TareasTable
               tareas={tareasFiltradas}
-              onUpdate={cargarTareas}
+              onUpdate={refetch}
               onTareaClick={handleEditarTarea}
-              onTareasChange={setTareas}
             />
           )
         ) : vistaActual === "proximos-5-dias" ? (
@@ -757,9 +706,8 @@ export default function TareasPage() {
                           <div className="border-t border-gray-200 bg-gray-50/50">
                             <TareasTable
                               tareas={tareasEmpleado}
-                              onUpdate={cargarTareas}
+                              onUpdate={refetch}
                               onTareaClick={handleEditarTarea}
-                              onTareasChange={setTareas}
                             />
                           </div>
                         </motion.div>
@@ -787,9 +735,8 @@ export default function TareasPage() {
           ) : (
             <TareasTable
               tareas={tareasFiltradas}
-              onUpdate={cargarTareas}
+              onUpdate={refetch}
               onTareaClick={handleEditarTarea}
-              onTareasChange={setTareas}
             />
           )
         ) : vistaActual === "todas" ? (
@@ -872,9 +819,8 @@ export default function TareasPage() {
                           <div className="p-4 bg-gray-50">
                             <TareasTable
                               tareas={tareasEmpleado}
-                              onUpdate={cargarTareas}
+                              onUpdate={refetch}
                               onTareaClick={handleEditarTarea}
-                              onTareasChange={setTareas}
                               hideControls={true}
                             />
                           </div>
@@ -902,7 +848,7 @@ export default function TareasPage() {
             setTareaSeleccionada(null);
           }, 500);
         }}
-        onUpdate={() => cargarTareas(false)}
+        onUpdate={refetch}
       />
     </motion.div>
   );
