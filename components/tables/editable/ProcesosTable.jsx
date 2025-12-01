@@ -116,12 +116,12 @@ export default function ProcesosTable({
               prev.map((p) =>
                 p.id === procesoId
                   ? {
-                      ...p,
-                      ultima_actualizacion: {
-                        descripcion: payload.new.contenido,
-                        fecha_actualizacion: payload.new.created_at,
-                      },
-                    }
+                    ...p,
+                    ultima_actualizacion: {
+                      descripcion: payload.new.contenido,
+                      fecha_actualizacion: payload.new.created_at,
+                    },
+                  }
                   : p
               )
             );
@@ -141,14 +141,14 @@ export default function ProcesosTable({
               prev.map((p) =>
                 p.id === procesoId
                   ? {
-                      ...p,
-                      ultima_actualizacion: ultimoComentario
-                        ? {
-                            descripcion: ultimoComentario.contenido,
-                            fecha_actualizacion: ultimoComentario.created_at,
-                          }
-                        : null,
-                    }
+                    ...p,
+                    ultima_actualizacion: ultimoComentario
+                      ? {
+                        descripcion: ultimoComentario.contenido,
+                        fecha_actualizacion: ultimoComentario.created_at,
+                      }
+                      : null,
+                  }
                   : p
               )
             );
@@ -215,11 +215,11 @@ export default function ProcesosTable({
           supabase.from("clientes").select("id, nombre").order("nombre"),
           supabase
             .from("estados_proceso")
-            .select("id, nombre, color")
-            .order("nombre"),
-          supabase.from("roles_cliente").select("id, nombre").order("nombre"),
-          supabase.from("materias").select("id, nombre").order("nombre"),
-          supabase.from("tipos_proceso").select("id, nombre").order("nombre"),
+            .select("id, nombre, color, categoria, orden")
+            .order("orden"),
+          supabase.from("roles_cliente").select("id, nombre, color").order("nombre"),
+          supabase.from("materias").select("id, nombre, color").order("nombre"),
+          supabase.from("tipos_proceso").select("id, nombre, color").order("nombre"),
         ]);
 
       if (clientesRes.data) setClientes(clientesRes.data);
@@ -703,10 +703,11 @@ function SortableRow({
         iconButton={
           <button
             onClick={() => onProcesoClick?.(proceso)}
-            className="text-gray-300 hover:text-primary-600 transition-colors opacity-0 group-hover:opacity-100"
+            className="cursor-pointer text-gray-500 hover:text-primary-600 hover:bg-gray-50 transition-colors opacity-0 group-hover:opacity-100"
             title="Abrir panel"
           >
             <PanelRightOpen className="h-3.5 w-3.5" />
+            <span>Abrir</span>
           </button>
         }
       />
@@ -731,6 +732,8 @@ function SortableRow({
             actualizarCelda(proceso.id, "rol_cliente_id", rol.id);
           }
         }}
+        color={proceso.rol_cliente?.color ? `${proceso.rol_cliente.color}20` : "#f3f4f6"}
+        textColor={proceso.rol_cliente?.color || "#374151"}
         placeholder="Rol"
       />
       <SelectCell
@@ -742,6 +745,8 @@ function SortableRow({
             actualizarCelda(proceso.id, "materia_id", materia.id);
           }
         }}
+        color={proceso.materia?.color ? `${proceso.materia.color}20` : "#f3f4f6"}
+        textColor={proceso.materia?.color || "#374151"}
         placeholder="Materia"
       />
       <SelectCell
@@ -753,9 +758,11 @@ function SortableRow({
             actualizarCelda(proceso.id, "tipo_proceso_id", tipo.id);
           }
         }}
+        color={proceso.tipo_proceso?.color ? `${proceso.tipo_proceso.color}20` : "#f3f4f6"}
+        textColor={proceso.tipo_proceso?.color || "#374151"}
         placeholder="Tipo"
       />
-      <SelectCell
+      <EstadoSelectCell
         value={proceso.estado?.nombre || ""}
         options={estados}
         onUpdate={(estadoNombre) => {
@@ -871,7 +878,6 @@ function TextCell({ value, onUpdate, iconButton }) {
       )}
     >
       <div className="flex items-center gap-2 min-w-[180px]">
-        {iconButton}
         <div className="flex-1" onClick={() => !editing && setEditing(true)}>
           {editing ? (
             <ContentEditable
@@ -886,6 +892,7 @@ function TextCell({ value, onUpdate, iconButton }) {
             <div className="min-h-5">{currentValue || ""}</div>
           )}
         </div>
+        {iconButton}
       </div>
     </td>
   );
@@ -977,7 +984,7 @@ function SearchableSelectCell({
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-50 bg-white border-2 border-primary-400 shadow-xl rounded-lg py-1 min-w-[250px] max-w-[350px] max-h-[300px] overflow-hidden animate-in fade-in duration-150"
+            className="z-50 bg-white border-2 border-primary-400 shadow-xl rounded-lg py-1 min-w-[250px] max-w-[350px] max-h-[300px] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Buscador */}
@@ -1126,7 +1133,7 @@ function SelectCell({
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-50 bg-white border-2 border-primary-400 shadow-xl rounded-lg py-1 min-w-[200px] max-w-[300px] max-h-[300px] overflow-hidden animate-in fade-in duration-150"
+            className="z-50 bg-white border-2 border-primary-400 shadow-xl rounded-lg py-1 min-w-[200px] max-w-[300px] max-h-[300px] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Buscador */}
@@ -1198,6 +1205,235 @@ function SelectCell({
   );
 }
 
+// Componente de celda select para Estados con secciones (Pendiente, En curso, Completado)
+function EstadoSelectCell({
+  value,
+  options,
+  onUpdate,
+  color,
+  textColor,
+  className,
+  allowCreate = false,
+  onCreateNew,
+  placeholder = "Seleccionar...",
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [referenceElement, setReferenceElement] = useState(null);
+  const [popperElement, setPopperElement] = useState(null);
+  const { styles, attributes } = usePopper(referenceElement, popperElement, {
+    placement: "bottom-start",
+    strategy: "fixed",
+  });
+
+  // Filtrar opciones por búsqueda
+  const filteredOptions = options.filter((opt) =>
+    opt.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Agrupar opciones por categoría
+  const categorias = [
+    { key: "Pendiente", label: "📋 Pendiente", color: "#6B7280" },
+    { key: "En_curso", label: "⏳ En curso", color: "#3B82F6" },
+    { key: "Completado", label: "✅ Completado", color: "#10B981" },
+  ];
+
+  const opcionesPorCategoria = categorias.map((cat) => ({
+    ...cat,
+    opciones: filteredOptions
+      .filter((opt) => opt.categoria === cat.key)
+      .sort((a, b) => (a.orden || 0) - (b.orden || 0)),
+  }));
+
+  // Opciones sin categoría
+  const opcionesSinCategoria = filteredOptions.filter(
+    (opt) => !opt.categoria || !categorias.some((c) => c.key === opt.categoria)
+  );
+
+  const handleSelect = (option) => {
+    onUpdate(option.nombre);
+    setIsOpen(false);
+    setSearchTerm("");
+  };
+
+  const handleCreateNew = async () => {
+    if (!searchTerm.trim() || !allowCreate || !onCreateNew) return;
+
+    const nuevoEstado = await onCreateNew(searchTerm.trim());
+    if (nuevoEstado) {
+      onUpdate(nuevoEstado.nombre);
+      setIsOpen(false);
+      setSearchTerm("");
+    }
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        popperElement &&
+        !popperElement.contains(e.target) &&
+        referenceElement &&
+        !referenceElement.contains(e.target)
+      ) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [isOpen, popperElement, referenceElement]);
+
+  return (
+    <>
+      <td
+        ref={setReferenceElement}
+        className={clsx(
+          "px-3 py-2 border-r cursor-pointer transition-all align-middle",
+          isOpen
+            ? "bg-primary-50 shadow-inner ring-2 ring-primary-400 ring-inset"
+            : "hover:bg-gray-50",
+          className
+        )}
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <div className="flex items-center min-h-6">
+          {value ? (
+            <span
+              className="inline-block px-2 py-0.5 rounded text-xs font-medium truncate max-w-full"
+              style={{
+                backgroundColor: color || "#f3f4f6",
+                color: textColor || "#374151",
+              }}
+            >
+              {value}
+            </span>
+          ) : (
+            <span className="text-gray-400 text-xs">{placeholder}</span>
+          )}
+        </div>
+      </td>
+
+      {isOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={setPopperElement}
+            style={styles.popper}
+            {...attributes.popper}
+            className="z-50 bg-white border-2 border-primary-400 shadow-xl rounded-lg py-1 min-w-[250px] max-w-[320px] max-h-[400px] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Buscador */}
+            <div className="px-2 py-2 border-b sticky top-0 bg-white z-10">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && searchTerm.trim() && allowCreate) {
+                    handleCreateNew();
+                  }
+                }}
+                placeholder="Buscar estado..."
+                className="w-full px-2 py-1 text-sm border rounded outline-none focus:ring-2 focus:ring-primary-400"
+                autoFocus
+              />
+            </div>
+
+            {/* Lista de opciones agrupadas por categoría */}
+            <div className="overflow-y-auto max-h-80">
+              {opcionesPorCategoria.map(
+                (categoria) =>
+                  categoria.opciones.length > 0 && (
+                    <div key={categoria.key}>
+                      {/* Header de categoría */}
+                      <div
+                        className="my-3 ring-2 px-3 py-1.5 text-xs font-semibold text-gray-500 bg-gray-50 sticky top-0 border-b border-gray-100"
+                        style={{ color: categoria.color }}
+                      >
+                        {categoria.label}
+                      </div>
+                      {/* Opciones de la categoría */}
+                      {categoria.opciones.map((option) => (
+                        <div
+                          key={option.id}
+                          className="px-3 py-2 hover:bg-primary-50 cursor-pointer text-sm transition-colors"
+                          onClick={() => handleSelect(option)}
+                        >
+                          <span
+                            className="inline-block px-2 py-0.5 rounded text-xs font-medium"
+                            style={{
+                              backgroundColor: option.color
+                                ? `${option.color}20`
+                                : "#f3f4f6",
+                              color: option.color || "#374151",
+                            }}
+                          >
+                            {option.nombre}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )
+              )}
+
+              {/* Opciones sin categoría */}
+              {opcionesSinCategoria.length > 0 && (
+                <div>
+                  <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 bg-gray-50 sticky top-0 border-b border-gray-100">
+                    📁 Otros
+                  </div>
+                  {opcionesSinCategoria.map((option) => (
+                    <div
+                      key={option.id}
+                      className="px-3 py-2 hover:bg-primary-50 cursor-pointer text-sm transition-colors"
+                      onClick={() => handleSelect(option)}
+                    >
+                      <span
+                        className="inline-block px-2 py-0.5 rounded text-xs font-medium"
+                        style={{
+                          backgroundColor: option.color
+                            ? `${option.color}20`
+                            : "#f3f4f6",
+                          color: option.color || "#374151",
+                        }}
+                      >
+                        {option.nombre}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Opción de crear nuevo */}
+              {allowCreate &&
+                searchTerm.trim() &&
+                filteredOptions.length === 0 && (
+                  <div
+                    className="px-3 py-2 hover:bg-primary-50 cursor-pointer text-sm transition-colors flex items-center gap-2 text-primary-600 font-medium border-t"
+                    onClick={handleCreateNew}
+                  >
+                    <span className="text-lg">+</span>
+                    Crear "{searchTerm}"
+                  </div>
+                )}
+
+              {filteredOptions.length === 0 && !searchTerm.trim() && (
+                <div className="px-3 py-2 text-sm text-gray-400">
+                  No hay estados disponibles
+                </div>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
+
 // Componente de celda de fecha
 function DateCell({ value, onUpdate }) {
   const [editing, setEditing] = useState(false);
@@ -1224,12 +1460,10 @@ function DateCell({ value, onUpdate }) {
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
-    const date = new Date(dateString);
-    return date.toLocaleDateString("es-ES", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    // Parsear la fecha manualmente para evitar problemas de zona horaria
+    // El formato de la BD es YYYY-MM-DD
+    const [year, month, day] = dateString.split("-").map(Number);
+    return `${day.toString().padStart(2, "0")}/${month.toString().padStart(2, "0")}/${year}`;
   };
 
   return (
