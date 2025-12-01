@@ -3,12 +3,6 @@ import { supabase } from "@/lib/supabase";
 import { useEffect, useRef } from "react";
 import toast from "react-hot-toast";
 
-/**
- * 🚀 HOOK OPTIMIZADO PARA TAREAS
- * - Caché inteligente (2 min staleTime)
- * - Realtime en tablas normales
- * - Invalidación automática del caché
- */
 export function useTareas(options = {}) {
   const queryClient = useQueryClient();
   const channelRef = useRef(null);
