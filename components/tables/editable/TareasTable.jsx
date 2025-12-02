@@ -95,10 +95,7 @@ export default function TareasTable({
                 .single();
 
               if (tareaActualizada) {
-                console.log(
-                  "✅ [TareasTable] Tarea recargada con designados:",
-                  tareaActualizada.empleados_designados
-                );
+               
                 setTareas((prev) => {
                   const index = prev.findIndex((t) => t.id === tareaId);
                   if (index === -1) return prev;
@@ -142,11 +139,7 @@ export default function TareasTable({
                 .single();
 
               if (tareaActualizada) {
-                console.log(
-                  "✅ [TareasTable] Recargando responsables para tarea:",
-                  tareaId,
-                  tareaActualizada.empleados_responsables
-                );
+               
                 setTareas((prev) => {
                   const index = prev.findIndex((t) => t.id === tareaId);
                   if (index === -1) return prev;
@@ -202,12 +195,7 @@ export default function TareasTable({
               .single();
 
             if (tareaActualizada) {
-              console.log(
-                "🔄 [TareasTable] Tarea actualizada:",
-                tareaActualizada.id,
-                "- Designados:",
-                tareaActualizada.empleados_designados?.length || 0
-              );
+              
 
               setTareas((prev) => {
                 const index = prev.findIndex(
@@ -1201,15 +1189,15 @@ function EstadoCell({
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-9999 bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-40 max-h-[400px] overflow-y-auto"
+            className="z-9999 bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-36 max-w-48  overflow-y-auto"
           >
             {categorias.map((categoria) => {
               const estadosCategoria = estadosAgrupados[categoria.key];
               if (estadosCategoria.length === 0) return null;
 
               return (
-                <div key={categoria.key} className="mb-1 last:mb-0">
-                  <div className="px-3 py-0.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                <div key={categoria.key} className="mb-0.5 last:mb-0">
+                  <div className="px-2 py-0.5 text-[9px] font-semibold text-gray-400 uppercase tracking-wider">
                     {categoria.label}
                   </div>
                   {estadosCategoria.map((estado) => (
@@ -1219,17 +1207,17 @@ function EstadoCell({
                         onChange(estado.id);
                         setIsOpen(false);
                       }}
-                      className="w-full px-3 py-1 text-left hover:bg-gray-50 transition-colors"
+                      className="w-full px-2 py-0.5 text-left hover:bg-gray-50 transition-colors"
                     >
                       <span
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
                         style={{
                           backgroundColor: `${estado.color}20`,
                           color: estado.color,
                         }}
                       >
                         <span
-                          className="w-2 h-2 rounded-full shrink-0"
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
                           style={{ backgroundColor: estado.color }}
                         />
                         {estado.nombre.charAt(0).toUpperCase() +

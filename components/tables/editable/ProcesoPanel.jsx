@@ -32,7 +32,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
   const [tareas, setTareas] = useState([]);
   const [tareaPanelOpen, setTareaPanelOpen] = useState(false);
   const [tareaSeleccionada, setTareaSeleccionada] = useState(null);
-  const [procesoLocal, setProcesoLocal] = useState(proceso);
+  const [procesoLocal, setProcesoLocal] = useState(null);
   const [nuevaTarea, setNuevaTarea] = useState({
     titulo: "",
     descripcion: "",
@@ -46,29 +46,46 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
   const [rolesCliente, setRolesCliente] = useState([]);
   const [lugares, setLugares] = useState([]);
 
+  // Función para limpiar HTML de campos de texto
+  const cleanHTML = (text) => {
+    if (!text) return text;
+    if (typeof document === "undefined") return text;
+    const temp = document.createElement("div");
+    temp.innerHTML = text;
+    return temp.textContent || temp.innerText || "";
+  };
+
+  // Sincronizar procesoLocal con proceso cuando cambia (igual que TareaPanel)
   useEffect(() => {
-    if (isOpen && proceso) {
-      cargarDatos();
-      cargarCatalogos();
-
-      // Limpiar HTML de campos de texto
-      const cleanHTML = (text) => {
-        if (!text) return text;
-        const temp = document.createElement("div");
-        temp.innerHTML = text;
-        return temp.textContent || temp.innerText || "";
-      };
-
-      const cleanedProceso = {
+    if (proceso?.id) {
+      setProcesoLocal({
         ...proceso,
         dependencia: cleanHTML(proceso.dependencia),
         pretensiones: cleanHTML(proceso.pretensiones),
         ultima_actuacion_esperada: cleanHTML(proceso.ultima_actuacion_esperada),
-      };
-
-      setProcesoLocal(cleanedProceso);
+      });
+    } else if (proceso) {
+      // Modo creación
+      setProcesoLocal({
+        ...proceso,
+        dependencia: cleanHTML(proceso.dependencia),
+        pretensiones: cleanHTML(proceso.pretensiones),
+        ultima_actuacion_esperada: cleanHTML(proceso.ultima_actuacion_esperada),
+      });
+    } else {
+      setProcesoLocal(null);
     }
-  }, [isOpen, proceso]);
+  }, [proceso]);
+
+  // Cargar datos cuando se abre el panel
+  useEffect(() => {
+    if (isOpen && proceso?.id) {
+      cargarDatos();
+      cargarCatalogos();
+    } else if (isOpen) {
+      cargarCatalogos();
+    }
+  }, [isOpen, proceso?.id]);
 
   const cargarCatalogos = async () => {
     try {
@@ -96,7 +113,16 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
       if (materiasRes.data) setMaterias(materiasRes.data);
       if (tiposRes.data) setTiposProceso(tiposRes.data);
       if (rolesRes.data) setRolesCliente(rolesRes.data);
-      if (lugaresRes.data) setLugares(lugaresRes.data);
+
+      // Debug lugares
+      console.log("📍 Lugares cargados:", lugaresRes);
+      if (lugaresRes.error) {
+        console.error("❌ Error cargando lugares:", lugaresRes.error);
+      }
+      if (lugaresRes.data) {
+        console.log("✅ Lugares disponibles:", lugaresRes.data.length);
+        setLugares(lugaresRes.data);
+      }
     } catch (error) {
       console.error("Error cargando catálogos:", error);
     }
@@ -104,7 +130,6 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
 
   const actualizarCampo = async (campo, valor) => {
     try {
-      setProcesoLocal(prev => ({ ...prev, [campo]: valor }));
       // Si no hay ID, es modo creación - actualizar localmente
       if (!proceso?.id) {
         // Actualizar el campo y buscar el objeto completo si es una relación
@@ -134,6 +159,32 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
         return;
       }
 
+      // Preparar actualizaciones locales optimistas con las relaciones
+      const updates = { [campo]: valor };
+
+      if (campo === "cliente_id" && valor) {
+        const cliente = clientes.find((c) => c.id === valor);
+        if (cliente) updates.cliente = cliente;
+      } else if (campo === "rol_cliente_id" && valor) {
+        const rol = rolesCliente.find((r) => r.id === valor);
+        if (rol) updates.rol_cliente = rol;
+      } else if (campo === "materia_id" && valor) {
+        const materia = materias.find((m) => m.id === valor);
+        if (materia) updates.materia = materia;
+      } else if (campo === "estado_id" && valor) {
+        const estado = estados.find((e) => e.id === valor);
+        if (estado) updates.estado = estado;
+      } else if (campo === "tipo_proceso_id" && valor) {
+        const tipo = tiposProceso.find((t) => t.id === valor);
+        if (tipo) updates.tipo_proceso = tipo;
+      } else if (campo === "lugar" && valor) {
+        const lugar = lugares.find((l) => l.id === valor);
+        if (lugar) updates.lugar_data = lugar;
+      }
+
+      // Actualizar estado local inmediatamente (optimistic update)
+      setProcesoLocal((prev) => ({ ...prev, ...updates }));
+
       // Actualizar proceso existente (modo edición)
       const { error } = await supabase
         .from("procesos")
@@ -142,11 +193,14 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
 
       if (error) {
         // Si hay error, revertir el cambio local
-        setProcesoLocal(prev => ({ ...prev, [campo]: proceso[campo] }));
+        setProcesoLocal((prev) => ({ ...prev, [campo]: proceso[campo] }));
         throw error;
       }
 
-      onUpdate?.();
+      // Mostrar confirmación
+      toast.success("Actualizado correctamente");
+
+      // El realtime de ProcesosTable se encarga de actualizar la fila específica
     } catch (error) {
       console.error("Error actualizando:", error);
       toast.error("Error al actualizar: " + error.message);
@@ -272,7 +326,13 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
       if (empleadosData) setEmpleados(empleadosData);
       if (procesoEmpleadosData) setProcesosEmpleados(procesoEmpleadosData);
       if (tareasData) {
-        console.log("✅ Tareas cargadas para proceso", proceso.id, ":", tareasData.length, "tareas");
+        console.log(
+          "✅ Tareas cargadas para proceso",
+          proceso.id,
+          ":",
+          tareasData.length,
+          "tareas"
+        );
         setTareas(tareasData);
       } else {
         console.log("⚠️ No se cargaron tareas - tareasData es null/undefined");
@@ -330,8 +390,8 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
             );
           }
 
-          // Actualizar la tabla principal
-          onUpdate?.();
+          // La tabla de procesos tiene su propia suscripción realtime
+          // No es necesario llamar a onUpdate() aquí
         }
       )
       .subscribe();
@@ -340,6 +400,45 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
       supabase.removeChannel(channel);
     };
   }, [proceso?.id, onUpdate]);
+
+  // Suscripción realtime para empleados asignados al proceso
+  useEffect(() => {
+    if (!proceso?.id || !isOpen) return;
+
+    const channel = supabase
+      .channel(`proceso-empleados-${proceso.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "proceso_empleados",
+          filter: `proceso_id=eq.${proceso.id}`,
+        },
+        async () => {
+          // Recargar empleados asignados
+          const { data: procesoEmpleadosData } = await supabase
+            .from("proceso_empleados")
+            .select(
+              `
+              *,
+              empleado:empleados(id, nombre, apellido)
+            `
+            )
+            .eq("proceso_id", proceso.id)
+            .eq("activo", true);
+
+          if (procesoEmpleadosData) {
+            setProcesosEmpleados(procesoEmpleadosData);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [proceso?.id, isOpen]);
 
   const agregarComentario = async () => {
     if (!nuevoComentario.trim() || !proceso?.id) return;
@@ -391,7 +490,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
       toast.success("Comentario agregado");
       setNuevoComentario("");
       cargarDatos();
-      onUpdate?.();
+      // No llamamos a onUpdate() - el realtime se encarga de actualizar la tabla
     } catch (error) {
       console.error("❌ Error agregando comentario:", error);
       toast.error("Error al agregar comentario: " + error.message);
@@ -656,7 +755,9 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
 
                       {/* Switch de Impulso */}
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-500 font-medium">Impulso</span>
+                        <span className="text-sm text-gray-500 font-medium">
+                          Impulso
+                        </span>
                         <button
                           onClick={() => {
                             // Invertir el valor actual
@@ -671,12 +772,18 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                               : "bg-gray-300 hover:bg-gray-400"
                           )}
                           disabled={loading}
-                          aria-label={procesoLocal?.impulso ? "Desactivar impulso" : "Activar impulso"}
+                          aria-label={
+                            procesoLocal?.impulso
+                              ? "Desactivar impulso"
+                              : "Activar impulso"
+                          }
                         >
                           <span
                             className={clsx(
                               "inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 shadow-sm",
-                              procesoLocal?.impulso ? "translate-x-6" : "translate-x-1"
+                              procesoLocal?.impulso
+                                ? "translate-x-6"
+                                : "translate-x-1"
                             )}
                           />
                         </button>
@@ -700,7 +807,12 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                       />
                       <EditableSelect
                         label="Lugar"
-                        value={procesoLocal?.lugar}
+                        value={
+                          procesoLocal?.lugar_data?.nombre ||
+                          lugares.find((l) => l.id === procesoLocal?.lugar)
+                            ?.nombre ||
+                          ""
+                        }
                         options={lugares}
                         onUpdate={(value) => actualizarCampo("lugar", value)}
                         placeholder="Selecciona un lugar"
@@ -765,6 +877,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                                 });
                               if (error) throw error;
                               cargarDatos();
+                              // El realtime de ProcesosTable se encarga de actualizar
                             } catch (error) {
                               console.error("Error asignando empleado:", error);
                               toast.error(
@@ -812,6 +925,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                                       .eq("id", pe.id);
                                     if (error) throw error;
                                     cargarDatos();
+                                    // El realtime de ProcesosTable se encarga de actualizar
                                   } catch (error) {
                                     console.error(
                                       "Error removiendo empleado:",
@@ -849,9 +963,19 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                         onClick={() => {
                           setTareaSeleccionada({
                             proceso_id: proceso.id,
-                            cliente_id: procesoLocal?.cliente_id || proceso?.cliente_id,
-                            proceso: { id: proceso.id, nombre: procesoLocal?.nombre || proceso?.nombre },
-                            cliente: procesoLocal?.cliente || proceso?.cliente || { id: procesoLocal?.cliente_id, nombre: clientes.find(c => c.id === procesoLocal?.cliente_id)?.nombre },
+                            cliente_id:
+                              procesoLocal?.cliente_id || proceso?.cliente_id,
+                            proceso: {
+                              id: proceso.id,
+                              nombre: procesoLocal?.nombre || proceso?.nombre,
+                            },
+                            cliente: procesoLocal?.cliente ||
+                              proceso?.cliente || {
+                                id: procesoLocal?.cliente_id,
+                                nombre: clientes.find(
+                                  (c) => c.id === procesoLocal?.cliente_id
+                                )?.nombre,
+                              },
                             nombre: "",
                             _fromProceso: true, // Marcador para bloquear edición
                           });
@@ -898,17 +1022,18 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                                     {tarea.nombre}
                                   </p>
                                   {/* Responsables */}
-                                  {tarea.empleados_responsables && tarea.empleados_responsables.length > 0 && (
-                                    <div className="flex items-center gap-1 mt-1">
-                                      <User className="w-3 h-3 text-gray-400" />
-                                      <span className="text-xs text-gray-500">
-                                        {tarea.empleados_responsables
-                                          .map(er => er.empleado?.nombre)
-                                          .filter(Boolean)
-                                          .join(", ")}
-                                      </span>
-                                    </div>
-                                  )}
+                                  {tarea.empleados_responsables &&
+                                    tarea.empleados_responsables.length > 0 && (
+                                      <div className="flex items-center gap-1 mt-1">
+                                        <User className="w-3 h-3 text-gray-400" />
+                                        <span className="text-xs text-gray-500">
+                                          {tarea.empleados_responsables
+                                            .map((er) => er.empleado?.nombre)
+                                            .filter(Boolean)
+                                            .join(", ")}
+                                        </span>
+                                      </div>
+                                    )}
                                   <div className="flex items-center gap-2 mt-2">
                                     {tarea.estado && (
                                       <span
@@ -966,29 +1091,36 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
 
                     {/* Input para nuevo comentario */}
                     <div className="mb-6">
-                      <div className="flex gap-2">
-                        <Input
-                          value={nuevoComentario}
-                          onChange={(e) => setNuevoComentario(e.target.value)}
-                          placeholder="Agregar un comentario..."
-                          className="flex-1 h-12"
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
-                              e.preventDefault();
-                              agregarComentario();
-                            }
-                          }}
-                        />
-                        <Button
+                      <div className="flex gap-3 items-center">
+                        <div className="flex-1 relative">
+                          <Input
+                            value={nuevoComentario}
+                            onChange={(e) => setNuevoComentario(e.target.value)}
+                            placeholder="Agregar un comentario..."
+                            className="h-12 pr-4 pl-4 rounded-xl border-2 border-gray-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                agregarComentario();
+                              }
+                            }}
+                          />
+                        </div>
+                        <button
                           onClick={agregarComentario}
                           disabled={!nuevoComentario.trim()}
-                          className="h-12 px-6"
+                          className={clsx(
+                            "h-12 px-5 rounded-xl font-medium text-sm flex items-center gap-2 transition-all duration-200 shadow-sm",
+                            nuevoComentario.trim()
+                              ? "bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-700 hover:to-primary-600 text-white shadow-primary-200 hover:shadow-md hover:shadow-primary-300 cursor-pointer"
+                              : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                          )}
                         >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Enviar
-                        </Button>
+                          <Plus className="w-4 h-4" />
+                          <span>Enviar</span>
+                        </button>
                       </div>
-                      <p className="text-xs text-gray-400 mt-2">
+                      <p className="text-xs text-gray-400 mt-2 ml-1">
                         Presiona Enter para enviar
                       </p>
                     </div>
@@ -996,39 +1128,39 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                     {/* Tabla de comentarios - Scroll independiente */}
                     <div className="flex-1 overflow-y-auto max-h-[calc(100vh-300px)]">
                       {comentarios.length > 0 ? (
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-auto rounded-lg border border-gray-200">
                           <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50 sticky top-0">
                               <tr>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[180px]">
-                                  Fecha/Hora
+                                <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[90px]">
+                                  Fecha
                                 </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[150px]">
-                                  Reponsable
+                                <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[120px]">
+                                  Responsable
                                 </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                   Comentario
                                 </th>
                               </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
+                            <tbody className="bg-white divide-y divide-gray-100">
                               {comentarios.map((comentario) => (
                                 <tr
                                   key={comentario.id}
-                                  className="hover:bg-gray-50 transition-colors"
+                                  className="hover:bg-blue-50/50 transition-colors"
                                 >
-                                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
-                                    <div className="flex flex-col">
-                                      <span className="font-medium">
+                                  <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap align-top">
+                                    <div className="flex flex-col leading-tight">
+                                      <span className="font-medium text-gray-600">
                                         {new Date(
                                           comentario.created_at
                                         ).toLocaleDateString("es-ES", {
                                           day: "2-digit",
                                           month: "2-digit",
-                                          year: "numeric",
+                                          year: "2-digit",
                                         })}
                                       </span>
-                                      <span className="text-gray-400">
+                                      <span className="text-gray-400 text-[10px]">
                                         {new Date(
                                           comentario.created_at
                                         ).toLocaleTimeString("es-ES", {
@@ -1038,15 +1170,15 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                                       </span>
                                     </div>
                                   </td>
-                                  <td className="px-4 py-3 text-sm text-gray-700">
-                                    <div className="font-medium">
+                                  <td className="px-3 py-2.5 text-xs text-gray-700 align-top">
+                                    <span className="font-medium text-gray-700 line-clamp-2">
                                       {comentario.empleado?.nombre}{" "}
                                       {comentario.empleado?.apellido ||
                                         "Usuario"}
-                                    </div>
+                                    </span>
                                   </td>
-                                  <td className="px-4 py-3 text-sm text-gray-700">
-                                    <p className="whitespace-pre-wrap wrap-break-words">
+                                  <td className="px-3 py-2.5 text-sm text-gray-700 align-top">
+                                    <p className="whitespace-pre-wrap break-words leading-relaxed">
                                       {comentario.contenido}
                                     </p>
                                   </td>

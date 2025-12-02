@@ -44,6 +44,23 @@ export default function ProcesosPage() {
     cargarProcesos();
   }, []);
 
+  // Sincronizar procesoSeleccionado cuando la tabla se actualiza via realtime
+  useEffect(() => {
+    if (!panelOpen || !procesoSeleccionado?.id) return;
+
+    const procesoActualizado = procesos.find(
+      (p) => p.id === procesoSeleccionado.id
+    );
+    if (procesoActualizado) {
+      const hayDiferencias =
+        JSON.stringify(procesoActualizado) !==
+        JSON.stringify(procesoSeleccionado);
+      if (hayDiferencias) {
+        setProcesoSeleccionado(procesoActualizado);
+      }
+    }
+  }, [procesos, panelOpen, procesoSeleccionado]);
+
   const cargarProcesos = async () => {
     try {
       setLoading(true);
@@ -53,10 +70,10 @@ export default function ProcesosPage() {
         `
           *,
           cliente:clientes(nombre, documento_identidad),
-          rol_cliente:rol_cliente_id(nombre),
-          materia:materias(nombre),
+          rol_cliente:rol_cliente_id(nombre, color),
+          materia:materias(nombre, color),
           estado:estados_proceso(nombre, color),
-          tipo_proceso:tipos_proceso(nombre),
+          tipo_proceso:tipos_proceso(nombre, color),
           lugar_data:lugar(nombre),
           empleados_asignados:proceso_empleados(
             rol,
@@ -289,7 +306,6 @@ export default function ProcesosPage() {
               <Button variant="outline" size="icon" className="mr-2">
                 <Filter className="h-4 w-4 " />
               </Button>
-             
             </div>
           </div>
         </CardHeader>
@@ -324,6 +340,7 @@ export default function ProcesosPage() {
               procesos={procesosFiltrados}
               onUpdate={cargarProcesos}
               onProcesoClick={handleProcesoClick}
+              onProcesosChange={setProcesos}
             />
           ) : (
             <div className="space-y-4">
@@ -425,10 +442,6 @@ export default function ProcesosPage() {
         }}
         onUpdate={cargarProcesos}
       />
-
-     
-
-     
     </div>
   );
 }

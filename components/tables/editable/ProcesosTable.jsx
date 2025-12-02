@@ -25,10 +25,43 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, PanelRightOpen, Trash2 } from "lucide-react";
 import ColumnHeader from "./ColumnHeader";
 
+// Función para generar color basado en string (para catálogos sin color)
+const getColorFromString = (str) => {
+  const colores = [
+    { bg: "#DBEAFE", text: "#2563EB" }, // Azul
+    { bg: "#D1FAE5", text: "#059669" }, // Verde
+    { bg: "#FEF3C7", text: "#D97706" }, // Amarillo
+    { bg: "#EDE9FE", text: "#7C3AED" }, // Púrpura
+    { bg: "#FCE7F3", text: "#DB2777" }, // Rosa
+    { bg: "#BAE6FD", text: "#0284C7" }, // Azul claro
+    { bg: "#FED7AA", text: "#EA580C" }, // Naranja
+    { bg: "#A7F3D0", text: "#047857" }, // Verde claro
+    { bg: "#FEE2E2", text: "#DC2626" }, // Rojo
+    { bg: "#C7D2FE", text: "#4338CA" }, // Índigo
+    { bg: "#FECACA", text: "#B91C1C" }, // Rojo suave
+    { bg: "#DDD6FE", text: "#6D28D9" }, // Violeta
+  ];
+
+  let hash = 0;
+  const idStr = String(str || "default");
+
+  for (let i = 0; i < idStr.length; i++) {
+    const char = idStr.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash;
+  }
+
+  hash = Math.abs(hash);
+  const index = hash % colores.length;
+
+  return colores[index];
+};
+
 export default function ProcesosTable({
   procesos: initialProcesos,
   onUpdate,
   onProcesoClick,
+  onProcesosChange, // Callback para notificar cambios en procesos
 }) {
   const [procesos, setProcesos] = useState(initialProcesos || []);
   const [clientes, setClientes] = useState([]);
@@ -69,20 +102,57 @@ export default function ProcesosTable({
           schema: "public",
           table: "procesos",
         },
-        (payload) => {
+        async (payload) => {
           if (payload.eventType === "INSERT") {
             // Recargar todo cuando se inserta un nuevo proceso
             onUpdate?.();
           } else if (payload.eventType === "UPDATE") {
-            // Actualizar el proceso específico
-            setProcesos((prev) =>
-              prev.map((p) =>
-                p.id === payload.new.id ? { ...p, ...payload.new } : p
+            // Cargar el proceso actualizado con todas sus relaciones
+            const { data: procesoActualizado } = await supabase
+              .from("procesos")
+              .select(
+                `
+                *,
+                cliente:clientes(nombre, documento_identidad),
+                rol_cliente:rol_cliente_id(nombre, color),
+                materia:materias(nombre, color),
+                estado:estados_proceso(nombre, color),
+                tipo_proceso:tipos_proceso(nombre, color),
+                lugar_data:lugar(nombre),
+                empleados_asignados:proceso_empleados(
+                  rol,
+                  empleado:empleados(nombre, apellido)
+                )
+              `
               )
-            );
+              .eq("id", payload.new.id)
+              .single();
+
+            if (procesoActualizado) {
+              // Transformar empleados
+              procesoActualizado.empleados_asignados =
+                procesoActualizado.empleados_asignados?.map(
+                  (pe) => pe.empleado
+                ) || [];
+
+              setProcesos((prev) => {
+                const newProcesos = prev.map((p) =>
+                  p.id === payload.new.id ? { ...p, ...procesoActualizado } : p
+                );
+                // Notificar al padre sobre el cambio
+                setTimeout(() => {
+                  onProcesosChange?.(newProcesos);
+                }, 0);
+                return newProcesos;
+              });
+            }
           } else if (payload.eventType === "DELETE") {
             // Eliminar el proceso de la lista
-            setProcesos((prev) => prev.filter((p) => p.id !== payload.old.id));
+            setProcesos((prev) => {
+              const newProcesos = prev.filter((p) => p.id !== payload.old.id);
+              onProcesosChange?.(newProcesos);
+              return newProcesos;
+            });
           }
         }
       )
@@ -116,12 +186,12 @@ export default function ProcesosTable({
               prev.map((p) =>
                 p.id === procesoId
                   ? {
-                    ...p,
-                    ultima_actualizacion: {
-                      descripcion: payload.new.contenido,
-                      fecha_actualizacion: payload.new.created_at,
-                    },
-                  }
+                      ...p,
+                      ultima_actualizacion: {
+                        descripcion: payload.new.contenido,
+                        fecha_actualizacion: payload.new.created_at,
+                      },
+                    }
                   : p
               )
             );
@@ -141,18 +211,64 @@ export default function ProcesosTable({
               prev.map((p) =>
                 p.id === procesoId
                   ? {
-                    ...p,
-                    ultima_actualizacion: ultimoComentario
-                      ? {
-                        descripcion: ultimoComentario.contenido,
-                        fecha_actualizacion: ultimoComentario.created_at,
-                      }
-                      : null,
-                  }
+                      ...p,
+                      ultima_actualizacion: ultimoComentario
+                        ? {
+                            descripcion: ultimoComentario.contenido,
+                            fecha_actualizacion: ultimoComentario.created_at,
+                          }
+                        : null,
+                    }
                   : p
               )
             );
           }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Realtime subscription para proceso_empleados (responsables)
+  useEffect(() => {
+    const channel = supabase
+      .channel("proceso-empleados-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "proceso_empleados",
+        },
+        async (payload) => {
+          const procesoId = payload.new?.proceso_id || payload.old?.proceso_id;
+          if (!procesoId) return;
+
+          // Recargar empleados asignados para este proceso
+          const { data: empleadosData } = await supabase
+            .from("proceso_empleados")
+            .select(
+              `
+              rol,
+              empleado:empleados(id, nombre, apellido)
+            `
+            )
+            .eq("proceso_id", procesoId)
+            .eq("activo", true);
+
+          const empleadosTransformados =
+            empleadosData?.map((pe) => pe.empleado) || [];
+
+          setProcesos((prev) =>
+            prev.map((p) =>
+              p.id === procesoId
+                ? { ...p, empleados_asignados: empleadosTransformados }
+                : p
+            )
+          );
         }
       )
       .subscribe();
@@ -217,9 +333,15 @@ export default function ProcesosTable({
             .from("estados_proceso")
             .select("id, nombre, color, categoria, orden")
             .order("orden"),
-          supabase.from("roles_cliente").select("id, nombre, color").order("nombre"),
+          supabase
+            .from("roles_cliente")
+            .select("id, nombre, color")
+            .order("nombre"),
           supabase.from("materias").select("id, nombre, color").order("nombre"),
-          supabase.from("tipos_proceso").select("id, nombre, color").order("nombre"),
+          supabase
+            .from("tipos_proceso")
+            .select("id, nombre, color")
+            .order("nombre"),
         ]);
 
       if (clientesRes.data) setClientes(clientesRes.data);
@@ -732,8 +854,12 @@ function SortableRow({
             actualizarCelda(proceso.id, "rol_cliente_id", rol.id);
           }
         }}
-        color={proceso.rol_cliente?.color ? `${proceso.rol_cliente.color}20` : "#f3f4f6"}
-        textColor={proceso.rol_cliente?.color || "#374151"}
+        color={
+          proceso.rol_cliente?.color
+            ? `${proceso.rol_cliente.color}20`
+            : undefined
+        }
+        textColor={proceso.rol_cliente?.color}
         placeholder="Rol"
       />
       <SelectCell
@@ -745,8 +871,10 @@ function SortableRow({
             actualizarCelda(proceso.id, "materia_id", materia.id);
           }
         }}
-        color={proceso.materia?.color ? `${proceso.materia.color}20` : "#f3f4f6"}
-        textColor={proceso.materia?.color || "#374151"}
+        color={
+          proceso.materia?.color ? `${proceso.materia.color}20` : undefined
+        }
+        textColor={proceso.materia?.color}
         placeholder="Materia"
       />
       <SelectCell
@@ -758,8 +886,12 @@ function SortableRow({
             actualizarCelda(proceso.id, "tipo_proceso_id", tipo.id);
           }
         }}
-        color={proceso.tipo_proceso?.color ? `${proceso.tipo_proceso.color}20` : "#f3f4f6"}
-        textColor={proceso.tipo_proceso?.color || "#374151"}
+        color={
+          proceso.tipo_proceso?.color
+            ? `${proceso.tipo_proceso.color}20`
+            : undefined
+        }
+        textColor={proceso.tipo_proceso?.color}
         placeholder="Tipo"
       />
       <EstadoSelectCell
@@ -783,26 +915,10 @@ function SortableRow({
           actualizarCelda(proceso.id, "fecha_proximo_contacto", valor)
         }
       />
-      <td className="px-3 py-1.5 border-r text-xs text-gray-600">
-        <div className="flex flex-wrap gap-1">
-          {proceso.empleados_asignados
-            ?.filter((pe) => pe.rol === "responsable")
-            .slice(0, 1)
-            .map((emp, idx) => (
-              <span
-                key={idx}
-                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800"
-                title={`${emp.nombre} ${emp.apellido}`}
-              >
-                {emp.nombre?.charAt(0)}
-                {emp.apellido?.charAt(0)}
-              </span>
-            ))}
-          {!proceso.empleados_asignados?.some(
-            (pe) => pe.rol === "responsable"
-          ) && <span className="text-gray-400">-</span>}
-        </div>
-      </td>
+      <EmpleadosProcesoDisplay
+        empleados={proceso.empleados_asignados || []}
+        onProcesoClick={() => onProcesoClick?.(proceso)}
+      />
       <td className="px-3 py-1.5 border-r text-center">
         <input
           type="checkbox"
@@ -871,10 +987,8 @@ function TextCell({ value, onUpdate, iconButton }) {
   return (
     <td
       className={clsx(
-        "px-3 py-1.5 border-r text-xs transition-all",
-        editing
-          ? "bg-primary-50 shadow-inner ring-2 ring-primary-400 ring-inset"
-          : "hover:bg-gray-50 cursor-text"
+        "px-3 py-1.5 border-r text-sm transition-all",
+        editing ? "bg-primary-50/50" : "hover:bg-gray-50 cursor-text"
       )}
     >
       <div className="flex items-center gap-2 min-w-[180px]">
@@ -885,11 +999,13 @@ function TextCell({ value, onUpdate, iconButton }) {
               html={currentValue || ""}
               onChange={handleChange}
               onBlur={handleBlur}
-              className="outline-none w-full min-h-5"
+              className="outline-none w-full min-h-5 font-medium"
               style={{ caretColor: "#2563eb" }}
             />
           ) : (
-            <div className="min-h-5">{currentValue || ""}</div>
+            <div className="min-h-5 font-medium text-gray-900">
+              {currentValue || ""}
+            </div>
           )}
         </div>
         {iconButton}
@@ -952,10 +1068,8 @@ function SearchableSelectCell({
       <td
         ref={setReferenceElement}
         className={clsx(
-          "px-3 py-2 border-r cursor-pointer transition-all align-middle",
-          isOpen
-            ? "bg-primary-50 shadow-inner ring-2 ring-primary-400 ring-inset"
-            : "hover:bg-gray-50",
+          "px-3 py-1.5 border-r cursor-pointer transition-all align-middle",
+          isOpen ? "bg-primary-50/50" : "hover:bg-gray-50",
           className
         )}
         onClick={() => setIsOpen(!isOpen)}
@@ -963,7 +1077,7 @@ function SearchableSelectCell({
         <div className="flex items-center min-h-6">
           {value ? (
             <span
-              className="inline-block px-2 py-0.5 rounded text-xs font-medium transition-all truncate max-w-full"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all hover:opacity-80 truncate max-w-full"
               style={{
                 backgroundColor: `${clienteColor}20`,
                 color: clienteColor,
@@ -984,7 +1098,7 @@ function SearchableSelectCell({
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-50 bg-white border-2 border-primary-400 shadow-xl rounded-lg py-1 min-w-[250px] max-w-[350px] max-h-[300px] overflow-hidden"
+            className="z-50 bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-[250px] max-w-[350px] max-h-[300px] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Buscador */}
@@ -994,7 +1108,7 @@ function SearchableSelectCell({
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Buscar cliente..."
-                className="w-full px-2 py-1 text-sm border rounded outline-none focus:ring-2 focus:ring-primary-400"
+                className="w-full px-2 py-1 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-primary-400"
                 autoFocus
               />
             </div>
@@ -1010,7 +1124,7 @@ function SearchableSelectCell({
                     onClick={() => handleSelect(option)}
                   >
                     <span
-                      className="inline-block px-2 py-0.5 rounded text-xs font-medium"
+                      className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
                       style={{
                         backgroundColor: `${color}20`,
                         color: color,
@@ -1035,7 +1149,7 @@ function SearchableSelectCell({
   );
 }
 
-// Componente de celda select con dropdown tipo Notion
+// Componente de celda select con dropdown tipo Notion - Estilo Badge
 function SelectCell({
   value,
   options,
@@ -1101,10 +1215,8 @@ function SelectCell({
       <td
         ref={setReferenceElement}
         className={clsx(
-          "px-3 py-2 border-r cursor-pointer transition-all align-middle",
-          isOpen
-            ? "bg-primary-50 shadow-inner ring-2 ring-primary-400 ring-inset"
-            : "hover:bg-gray-50",
+          "px-3 py-1.5 border-r cursor-pointer transition-all align-middle",
+          isOpen ? "bg-gray-50" : "hover:bg-gray-50",
           className
         )}
         onClick={() => setIsOpen(!isOpen)}
@@ -1112,12 +1224,18 @@ function SelectCell({
         <div className="flex items-center min-h-6">
           {value ? (
             <span
-              className="inline-block px-2 py-0.5 rounded text-xs font-medium truncate max-w-full"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all hover:opacity-80"
               style={{
                 backgroundColor: color || "#f3f4f6",
                 color: textColor || "#374151",
               }}
             >
+              {textColor && (
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: textColor }}
+                />
+              )}
               {value}
             </span>
           ) : (
@@ -1133,7 +1251,7 @@ function SelectCell({
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-50 bg-white border-2 border-primary-400 shadow-xl rounded-lg py-1 min-w-[200px] max-w-[300px] max-h-[300px] overflow-hidden"
+            className="z-50 bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-[200px] max-w-[300px] max-h-[300px] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Buscador */}
@@ -1149,7 +1267,7 @@ function SelectCell({
                     }
                   }}
                   placeholder="Buscar o crear..."
-                  className="w-full px-2 py-1 text-sm border rounded outline-none focus:ring-2 focus:ring-primary-400"
+                  className="w-full px-2 py-1 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-primary-400"
                   autoFocus
                 />
               </div>
@@ -1165,12 +1283,16 @@ function SelectCell({
                 >
                   {option.color ? (
                     <span
-                      className="inline-block px-2 py-0.5 rounded text-xs font-medium"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
                       style={{
                         backgroundColor: `${option.color}20`,
                         color: option.color,
                       }}
                     >
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: option.color }}
+                      />
                       {option.nombre}
                     </span>
                   ) : (
@@ -1291,10 +1413,8 @@ function EstadoSelectCell({
       <td
         ref={setReferenceElement}
         className={clsx(
-          "px-3 py-2 border-r cursor-pointer transition-all align-middle",
-          isOpen
-            ? "bg-primary-50 shadow-inner ring-2 ring-primary-400 ring-inset"
-            : "hover:bg-gray-50",
+          "px-3 py-1.5 border-r cursor-pointer transition-all align-middle",
+          isOpen ? "bg-gray-50" : "hover:bg-gray-50",
           className
         )}
         onClick={() => setIsOpen(!isOpen)}
@@ -1302,12 +1422,18 @@ function EstadoSelectCell({
         <div className="flex items-center min-h-6">
           {value ? (
             <span
-              className="inline-block px-2 py-0.5 rounded text-xs font-medium truncate max-w-full"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all hover:opacity-80"
               style={{
                 backgroundColor: color || "#f3f4f6",
                 color: textColor || "#374151",
               }}
             >
+              {textColor && (
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: textColor }}
+                />
+              )}
               {value}
             </span>
           ) : (
@@ -1323,7 +1449,7 @@ function EstadoSelectCell({
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-50 bg-white border-2 border-primary-400 shadow-xl rounded-lg py-1 min-w-[250px] max-w-[320px] max-h-[400px] overflow-hidden"
+            className="z-50 bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-[250px] max-w-[320px] max-h-[400px] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Buscador */}
@@ -1338,7 +1464,7 @@ function EstadoSelectCell({
                   }
                 }}
                 placeholder="Buscar estado..."
-                className="w-full px-2 py-1 text-sm border rounded outline-none focus:ring-2 focus:ring-primary-400"
+                className="w-full px-2 py-1 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-primary-400"
                 autoFocus
               />
             </div>
@@ -1364,7 +1490,7 @@ function EstadoSelectCell({
                           onClick={() => handleSelect(option)}
                         >
                           <span
-                            className="inline-block px-2 py-0.5 rounded text-xs font-medium"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
                             style={{
                               backgroundColor: option.color
                                 ? `${option.color}20`
@@ -1372,6 +1498,12 @@ function EstadoSelectCell({
                               color: option.color || "#374151",
                             }}
                           >
+                            {option.color && (
+                              <span
+                                className="w-2 h-2 rounded-full shrink-0"
+                                style={{ backgroundColor: option.color }}
+                              />
+                            )}
                             {option.nombre}
                           </span>
                         </div>
@@ -1401,6 +1533,12 @@ function EstadoSelectCell({
                           color: option.color || "#374151",
                         }}
                       >
+                        {option.color && (
+                          <span
+                            className="w-2 h-2 rounded-full shrink-0"
+                            style={{ backgroundColor: option.color }}
+                          />
+                        )}
                         {option.nombre}
                       </span>
                     </div>
@@ -1463,16 +1601,16 @@ function DateCell({ value, onUpdate }) {
     // Parsear la fecha manualmente para evitar problemas de zona horaria
     // El formato de la BD es YYYY-MM-DD
     const [year, month, day] = dateString.split("-").map(Number);
-    return `${day.toString().padStart(2, "0")}/${month.toString().padStart(2, "0")}/${year}`;
+    return `${day.toString().padStart(2, "0")}/${month
+      .toString()
+      .padStart(2, "0")}/${year}`;
   };
 
   return (
     <td
       className={clsx(
         "px-3 py-2 border-r text-xs transition-all align-middle",
-        editing
-          ? "bg-primary-50 shadow-inner ring-2 ring-primary-400 ring-inset"
-          : "hover:bg-gray-50 cursor-pointer"
+        editing ? "bg-primary-50/50" : "hover:bg-gray-50 cursor-pointer"
       )}
       onClick={() => !editing && setEditing(true)}
     >
@@ -1489,6 +1627,86 @@ function DateCell({ value, onUpdate }) {
         ) : (
           <span>{formatDate(currentValue)}</span>
         )}
+      </div>
+    </td>
+  );
+}
+
+// Componente para mostrar empleados asignados como badges coloridos
+function EmpleadosProcesoDisplay({ empleados, onProcesoClick }) {
+  // Función para generar color único basado en ID o nombre del empleado
+  const getEmpleadoColor = (empleadoId, nombreEmpleado = "") => {
+    const colores = [
+      { bg: "#DBEAFE", text: "#2563EB" }, // Azul
+      { bg: "#D1FAE5", text: "#059669" }, // Verde
+      { bg: "#FEF3C7", text: "#D97706" }, // Amarillo/Naranja
+      { bg: "#EDE9FE", text: "#7C3AED" }, // Púrpura
+      { bg: "#FCE7F3", text: "#DB2777" }, // Rosa
+      { bg: "#BAE6FD", text: "#0284C7" }, // Azul claro
+      { bg: "#FED7AA", text: "#EA580C" }, // Naranja claro
+      { bg: "#A7F3D0", text: "#047857" }, // Verde claro
+      { bg: "#FEE2E2", text: "#DC2626" }, // Rojo
+      { bg: "#C7D2FE", text: "#4338CA" }, // Índigo
+    ];
+
+    let hash = 0;
+    const idStr = String(empleadoId || nombreEmpleado || "default");
+
+    for (let i = 0; i < idStr.length; i++) {
+      const char = idStr.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash;
+    }
+
+    hash = Math.abs(hash);
+    const index = (hash * 2654435761) % colores.length;
+
+    return colores[index];
+  };
+
+  const empleadosArray = Array.isArray(empleados) ? empleados : [];
+  const empleadosValidos = empleadosArray.filter(
+    (emp) => emp && (emp.nombre || emp.apellido)
+  );
+
+  return (
+    <td className="px-3 py-1.5 border-r relative group">
+      <div className="flex flex-wrap gap-1 min-w-[120px]">
+        {empleadosValidos.length > 0 ? (
+          empleadosValidos.map((empleado, index) => {
+            const nombre = empleado.nombre
+              ? empleado.nombre.split(" ")[0]
+              : empleado.apellido?.split(" ")[0] || "?";
+            const colorObj = getEmpleadoColor(empleado.id, empleado.nombre);
+
+            return (
+              <span
+                key={empleado.id || index}
+                className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
+                style={{
+                  backgroundColor: colorObj.bg,
+                  color: colorObj.text,
+                }}
+                title={`${empleado.nombre || ""} ${empleado.apellido || ""} ${
+                  empleado.rol ? `(${empleado.rol})` : ""
+                }`}
+              >
+                {nombre}
+              </span>
+            );
+          })
+        ) : (
+          <span className="text-xs text-gray-400">Sin asignar</span>
+        )}
+
+        {/* Botón para abrir panel (visible en hover) */}
+        <button
+          onClick={() => onProcesoClick?.()}
+          className="ml-1 text-gray-300 hover:text-primary-600 transition-colors opacity-0 group-hover:opacity-100"
+          title="Editar asignados"
+        >
+          <PanelRightOpen className="h-3.5 w-3.5" />
+        </button>
       </div>
     </td>
   );

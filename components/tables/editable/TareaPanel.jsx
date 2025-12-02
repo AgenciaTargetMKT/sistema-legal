@@ -86,22 +86,14 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
         cliente: tarea?.cliente || null,
         estado_id: null,
         empleados_designados: [],
-        empleados_responsables: usuarioActual ? [usuarioActual] : [],
+        empleados_responsables: [],
         _fromProceso: tarea?._fromProceso || false,
       });
       setTituloLocal("");
       valorAnteriorTitulo.current = "";
       setPrefijoTarea("");
-
-      // Si el usuario actual no está cargado, actualizamos después
-      if (!usuarioActual) {
-        cargarUsuarioActual().then(() => {
-          // El responsable se agregará cuando usuarioActual esté disponible
-        });
-      }
     } else if (isOpen && tarea?.id) {
       // Modo edición: inicializar título solo la primera vez
-
       if (!tituloLocal) {
         setTituloLocal(tarea?.nombre || "");
         valorAnteriorTitulo.current = tarea?.nombre || "";
@@ -143,7 +135,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
         }));
       }
     }
-  }, [usuarioActual, nuevaTareaTemp, tarea?.id]);
+  }, [usuarioActual, tarea?.id]); // Removido nuevaTareaTemp de las dependencias para evitar loop
 
   // Sincronizar título cuando tarea cambia (solo en modo edición y si el panel está abierto)
   useEffect(() => {
@@ -190,28 +182,6 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
 
         if (empleado) {
           setUsuarioActual(empleado);
-
-          // Si es una nueva tarea, configurar empleados según el rol
-          if (!tarea?.id) {
-            const esPracticante =
-              empleado.roles_empleados?.nombre === "Practicante";
-
-            if (esPracticante) {
-              // Si es practicante, agregarlo como designado pero NO como responsable
-              setNuevaTareaTemp((prev) => ({
-                ...prev,
-                empleados_designados: [empleado],
-                empleados_responsables: [], // Debe seleccionar un Asesor legal
-              }));
-            } else {
-              // Si es Asesor legal o admin, agregarlo como responsable
-              setNuevaTareaTemp((prev) => ({
-                ...prev,
-                empleados_responsables: [empleado],
-                empleados_designados: [],
-              }));
-            }
-          }
         }
       }
     } catch (error) {
@@ -572,8 +542,10 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
               );
             });
         } else if (campo === "empleados_responsables") {
-          // Validar que el usuario actual no sea removido
-          if (usuarioActual) {
+          // Validar que el usuario actual no sea removido (solo si NO es practicante)
+          const esPracticante =
+            usuarioActual?.roles_empleados?.nombre === "Practicante";
+          if (usuarioActual && !esPracticante) {
             const tieneUsuarioActual = valor.some(
               (opt) => opt.value === usuarioActual.id
             );
@@ -611,8 +583,14 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
         campo === "empleados_designados" ||
         campo === "empleados_responsables"
       ) {
-        // Si es responsables, validar que el usuario actual no sea removido
-        if (campo === "empleados_responsables" && usuarioActual) {
+        // Si es responsables, validar que el usuario actual no sea removido (solo si NO es practicante)
+        const esPracticante =
+          usuarioActual?.roles_empleados?.nombre === "Practicante";
+        if (
+          campo === "empleados_responsables" &&
+          usuarioActual &&
+          !esPracticante
+        ) {
           const tieneUsuarioActual = valor.some(
             (opt) => opt.value === usuarioActual.id
           );
@@ -1237,12 +1215,21 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
   const esUsuarioDesignado = () => {
     if (!usuarioActual?.id || !datosActuales) return false;
 
+    // Si es una nueva tarea (sin ID), permitir edición completa
+    if (!tarea?.id) return false;
+
     const esCreador = datosActuales.empleado_creador_id === usuarioActual.id;
     const esResponsable = (datosActuales.empleados_responsables || []).some(
-      (emp) => emp.empleado_id === usuarioActual.id
+      (emp) => {
+        const empId = emp.empleado_id || emp.id;
+        return empId === usuarioActual.id;
+      }
     );
     const esDesignado = (datosActuales.empleados_designados || []).some(
-      (emp) => emp.empleado_id === usuarioActual.id
+      (emp) => {
+        const empId = emp.empleado_id || emp.id;
+        return empId === usuarioActual.id;
+      }
     );
 
     // Es designado SOLO si está en designados pero NO es creador ni responsable
@@ -2446,13 +2433,24 @@ function EmpleadosBadgeSelector({
       }
     };
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    // Esperar un momento antes de agregar el listener para evitar que se cierre inmediatamente
+    const timeoutId = setTimeout(() => {
+      document.addEventListener("mousedown", handleClickOutside);
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, [isOpen]);
 
-  const handleToggleEmpleado = (empleado) => {
+  const handleToggleEmpleado = (e, empleado) => {
+    // Prevenir propagación
+    e.stopPropagation();
+
     // Prevenir múltiples llamadas simultáneas
     if (updateInProgress.current) {
+      console.log("⏳ Update en progreso, esperando...");
       return;
     }
 
@@ -2462,6 +2460,7 @@ function EmpleadosBadgeSelector({
       return;
     }
 
+    console.log("🔄 Toggling empleado:", empleado.nombre);
     updateInProgress.current = true;
 
     const isSelected = value?.some((e) => {
@@ -2477,9 +2476,11 @@ function EmpleadosBadgeSelector({
         const empId = e.empleado?.id || e.id;
         return empId !== empleado.id;
       });
+      console.log("➖ Removiendo empleado");
     } else {
       // Agregar empleado - mantener estructura original
       newValue = [...(value || []), { empleado: empleado }];
+      console.log("➕ Agregando empleado");
     }
 
     // Convertir a formato que espera el actualizarCampo
@@ -2501,6 +2502,8 @@ function EmpleadosBadgeSelector({
         };
       })
       .filter(Boolean); // Eliminar nulls
+
+    console.log("✅ Formato final:", formatted);
 
     // Llamar a onUpdate - NO usar await para que sea inmediato
     onUpdate(formatted);
@@ -2537,7 +2540,13 @@ function EmpleadosBadgeSelector({
   return (
     <div ref={containerRef} className="relative flex-1">
       <div
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!disabled) {
+            console.log("🔘 Toggle dropdown:", !isOpen);
+            setIsOpen(!isOpen);
+          }
+        }}
         className={clsx(
           "flex flex-wrap gap-1.5 px-2 py-1.5 rounded-lg transition-colors min-h-8",
           disabled
@@ -2604,7 +2613,8 @@ function EmpleadosBadgeSelector({
               return (
                 <button
                   key={uniqueKey}
-                  onClick={() => handleToggleEmpleado(empleado)}
+                  type="button"
+                  onClick={(e) => handleToggleEmpleado(e, empleado)}
                   className={clsx(
                     "w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-3",
                     isSelected && "bg-primary-50"
