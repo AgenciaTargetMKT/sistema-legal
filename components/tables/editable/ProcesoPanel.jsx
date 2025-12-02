@@ -104,6 +104,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
 
   const actualizarCampo = async (campo, valor) => {
     try {
+      setProcesoLocal(prev => ({ ...prev, [campo]: valor }));
       // Si no hay ID, es modo creación - actualizar localmente
       if (!proceso?.id) {
         // Actualizar el campo y buscar el objeto completo si es una relación
@@ -139,7 +140,11 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
         .update({ [campo]: valor })
         .eq("id", proceso.id);
 
-      if (error) throw error;
+      if (error) {
+        // Si hay error, revertir el cambio local
+        setProcesoLocal(prev => ({ ...prev, [campo]: proceso[campo] }));
+        throw error;
+      }
 
       onUpdate?.();
     } catch (error) {
@@ -241,22 +246,38 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
         .eq("activo", true);
 
       // Cargar tareas del proceso
-      const { data: tareasData } = await supabase
+      const { data: tareasData, error: tareasError } = await supabase
         .from("tareas")
         .select(
           `
           *,
           estado:estado_id(id, nombre, color),
-          empleado_asignado:empleado_asignado_id(id, nombre, apellido)
+          empleados_responsables:tareas_empleados_responsables(empleado:empleados(id, nombre, apellido))
         `
         )
         .eq("proceso_id", proceso.id)
         .order("created_at", { ascending: false });
 
+      if (tareasError) {
+        console.error("❌ Error cargando tareas:", tareasError);
+        console.error("Detalles del error:", {
+          message: tareasError.message,
+          details: tareasError.details,
+          hint: tareasError.hint,
+          code: tareasError.code,
+        });
+      }
+
       if (comentariosData) setComentarios(comentariosData);
       if (empleadosData) setEmpleados(empleadosData);
       if (procesoEmpleadosData) setProcesosEmpleados(procesoEmpleadosData);
-      if (tareasData) setTareas(tareasData);
+      if (tareasData) {
+        console.log("✅ Tareas cargadas para proceso", proceso.id, ":", tareasData.length, "tareas");
+        setTareas(tareasData);
+      } else {
+        console.log("⚠️ No se cargaron tareas - tareasData es null/undefined");
+        setTareas([]);
+      }
     } catch (error) {
       console.error("Error cargando datos:", error);
     } finally {
@@ -430,7 +451,8 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
               .select(
                 `
                 *,
-                empleado:empleados(nombre, apellido)
+                estado:estado_id(id, nombre, color),
+                empleados_responsables:tareas_empleados_responsables(empleado:empleados(id, nombre, apellido))
               `
               )
               .eq("id", payload.new.id)
@@ -440,11 +462,24 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
               setTareas((prev) => [data, ...prev]);
             }
           } else if (payload.eventType === "UPDATE") {
-            setTareas((prev) =>
-              prev.map((t) =>
-                t.id === payload.new.id ? { ...t, ...payload.new } : t
+            // Recargar la tarea completa con todas las relaciones
+            const { data } = await supabase
+              .from("tareas")
+              .select(
+                `
+                *,
+                estado:estado_id(id, nombre, color),
+                empleados_responsables:tareas_empleados_responsables(empleado:empleados(id, nombre, apellido))
+              `
               )
-            );
+              .eq("id", payload.new.id)
+              .single();
+
+            if (data) {
+              setTareas((prev) =>
+                prev.map((t) => (t.id === payload.new.id ? data : t))
+              );
+            }
           } else if (payload.eventType === "DELETE") {
             setTareas((prev) => prev.filter((t) => t.id !== payload.old.id));
           }
@@ -524,7 +559,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                 )}
                 <button
                   onClick={onClose}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="cursor-pointer p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -618,6 +653,34 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                           actualizarCampo("dependencia", value)
                         }
                       />
+
+                      {/* Switch de Impulso */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-500 font-medium">Impulso</span>
+                        <button
+                          onClick={() => {
+                            // Invertir el valor actual
+                            const nuevoValor = !procesoLocal?.impulso;
+                            // Actualizar inmediatamente
+                            actualizarCampo("impulso", nuevoValor);
+                          }}
+                          className={clsx(
+                            "relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2",
+                            procesoLocal?.impulso
+                              ? "bg-primary-600 hover:bg-primary-700"
+                              : "bg-gray-300 hover:bg-gray-400"
+                          )}
+                          disabled={loading}
+                          aria-label={procesoLocal?.impulso ? "Desactivar impulso" : "Activar impulso"}
+                        >
+                          <span
+                            className={clsx(
+                              "inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 shadow-sm",
+                              procesoLocal?.impulso ? "translate-x-6" : "translate-x-1"
+                            )}
+                          />
+                        </button>
+                      </div>
                     </div>
                   </section>
 
@@ -757,7 +820,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                                     toast.error("Error al remover empleado");
                                   }
                                 }}
-                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 rounded transition-all"
+                                className="cursor-pointer opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 rounded transition-all"
                               >
                                 <X className="w-4 h-4 text-red-600" />
                               </button>
@@ -786,11 +849,15 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                         onClick={() => {
                           setTareaSeleccionada({
                             proceso_id: proceso.id,
+                            cliente_id: procesoLocal?.cliente_id || proceso?.cliente_id,
+                            proceso: { id: proceso.id, nombre: procesoLocal?.nombre || proceso?.nombre },
+                            cliente: procesoLocal?.cliente || proceso?.cliente || { id: procesoLocal?.cliente_id, nombre: clientes.find(c => c.id === procesoLocal?.cliente_id)?.nombre },
                             nombre: "",
+                            _fromProceso: true, // Marcador para bloquear edición
                           });
                           setTareaPanelOpen(true);
                         }}
-                        className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-medium rounded transition-colors flex items-center gap-1.5"
+                        className="cursor-pointer px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-medium rounded transition-colors flex items-center gap-1.5"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         Nueva Tarea
@@ -830,10 +897,17 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                                   >
                                     {tarea.nombre}
                                   </p>
-                                  {tarea.descripcion && (
-                                    <p className="text-xs text-gray-500 mt-1 line-clamp-1">
-                                      {tarea.descripcion}
-                                    </p>
+                                  {/* Responsables */}
+                                  {tarea.empleados_responsables && tarea.empleados_responsables.length > 0 && (
+                                    <div className="flex items-center gap-1 mt-1">
+                                      <User className="w-3 h-3 text-gray-400" />
+                                      <span className="text-xs text-gray-500">
+                                        {tarea.empleados_responsables
+                                          .map(er => er.empleado?.nombre)
+                                          .filter(Boolean)
+                                          .join(", ")}
+                                      </span>
+                                    </div>
                                   )}
                                   <div className="flex items-center gap-2 mt-2">
                                     {tarea.estado && (
@@ -847,18 +921,14 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                                         {tarea.estado.nombre}
                                       </span>
                                     )}
-                                    {tarea.prioridad && (
-                                      <span
-                                        className={clsx(
-                                          "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",
-                                          tarea.prioridad === "alta"
-                                            ? "bg-red-100 text-red-700"
-                                            : tarea.prioridad === "media"
-                                            ? "bg-yellow-100 text-yellow-700"
-                                            : "bg-gray-100 text-gray-700"
-                                        )}
-                                      >
-                                        {tarea.prioridad}
+                                    {tarea.importancia === "importante" && (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
+                                        Importante
+                                      </span>
+                                    )}
+                                    {tarea.urgencia === "urgente" && (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-700">
+                                        Urgente
                                       </span>
                                     )}
                                   </div>
