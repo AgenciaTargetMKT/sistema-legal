@@ -43,7 +43,7 @@ const CommandInput = React.forwardRef(({ className, ...props }, ref) => (
       {...props}
     />
   </div>
-));
+))
 
 CommandInput.displayName = CommandPrimitive.Input.displayName;
 

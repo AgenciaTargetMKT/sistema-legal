@@ -255,15 +255,6 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
       <div className="blocknote-editor-wrapper rounded-lg py-4 overflow-hidden border border-gray-200 bg-white">
         <BlockNoteView editor={editor} editable={!readOnly} theme="light" />
       </div>
-
-      {/* Instrucciones para el usuario */}
-      {!readOnly && (
-        <div className="text-xs text-gray-500 px-3">
-          💡 <strong>Tip:</strong> Puedes arrastrar imágenes directamente al
-          editor o pegarlas con Ctrl+V / Cmd+V
-        </div>
-      )}
-
       {/* Barra de estado */}
       {!readOnly && (
         <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
