@@ -68,9 +68,9 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
     }
   }, [tarea]);
 
-  // Inicializar cuando se abre el panel (solo una vez)
+  // Inicializar cuando se abre el panel
   useEffect(() => {
-    if (isOpen && !nuevaTareaTemp && !tarea?.id) {
+    if (isOpen && !tarea?.id) {
       // Modo creación: inicializar estado temporal
 
       // Función asíncrona para cargar empleado actual y configurar responsable por defecto
@@ -86,7 +86,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
           if (user) {
             const { data: empleadoData } = await supabase
               .from("empleados")
-              .select("id, nombre, apellido, email")
+              .select("id, nombre, apellido, email, roles_empleados(nombre)")
               .eq("auth_user_id", user.id)
               .single();
 
@@ -98,6 +98,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
           }
         }
 
+        // Si viene desde un proceso, usar esos datos
         setNuevaTareaTemp({
           nombre: "",
           descripcion: "",
@@ -105,17 +106,21 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
           importancia: "no importante",
           urgencia: "no urgente",
           fecha_vencimiento: null,
-          proceso_id: null,
-          cliente_id: null,
+          proceso_id: tarea?.proceso_id || null,
+          cliente_id: tarea?.cliente_id || null,
+          proceso: tarea?.proceso || null,
+          cliente: tarea?.cliente || null,
           estado_id: null,
           empleados_designados: [],
           empleados_responsables: [],
+          _fromProceso: tarea?._fromProceso || false, // Mantener el marcador
         });
       };
 
       inicializarNuevaTarea();
       setTituloLocal("");
       valorAnteriorTitulo.current = "";
+      setPrefijoTarea("");
       if (!catalogosCargados) {
         cargarCatalogos();
         cargarUsuarioActual();
@@ -143,12 +148,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
       setTareaLocal(null);
       setPrefijoTarea(""); // Resetear prefijo al cerrar
     }
-
-    // Resetear prefijo cuando se abre para nueva tarea
-    if (isOpen && !tarea?.id) {
-      setPrefijoTarea("");
-    }
-  }, [isOpen, tarea?.id]); // Solo escuchar cambios en isOpen y tarea?.id
+  }, [isOpen, tarea?.id, tarea?.proceso_id, tarea?.cliente_id, tarea?._fromProceso]); // Escuchar cambios en los datos del proceso y cliente
 
   // Sincronizar título cuando tarea cambia (solo en modo edición y si el panel está abierto)
   useEffect(() => {
@@ -636,21 +636,21 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
           const emp = empleados.find((e) => e.id === opt.value);
           return emp
             ? {
-                ...emp,
-                empleado_id: emp.id,
-                empleado: emp,
-              }
+              ...emp,
+              empleado_id: emp.id,
+              empleado: emp,
+            }
             : {
+              id: opt.value,
+              empleado_id: opt.value,
+              nombre: opt.label.split(" ")[0],
+              apellido: opt.label.split(" ").slice(1).join(" "),
+              empleado: {
                 id: opt.value,
-                empleado_id: opt.value,
                 nombre: opt.label.split(" ")[0],
                 apellido: opt.label.split(" ").slice(1).join(" "),
-                empleado: {
-                  id: opt.value,
-                  nombre: opt.label.split(" ")[0],
-                  apellido: opt.label.split(" ").slice(1).join(" "),
-                },
-              };
+              },
+            };
         });
 
         // Actualizar estado local inmediatamente para UI
@@ -1186,8 +1186,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                 errorData
               );
               toast.error(
-                `Tarea creada, pero no se pudo crear evento en calendario: ${
-                  errorData.error || "Error desconocido"
+                `Tarea creada, pero no se pudo crear evento en calendario: ${errorData.error || "Error desconocido"
                 }`
               );
             } else {
@@ -1235,7 +1234,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
   const tareaFinalizada =
     datosActuales?.estado?.nombre === "finalizado" ||
     estados.find((e) => e.id === datosActuales?.estado_id)?.nombre ===
-      "finalizado";
+    "finalizado";
 
   // Verificar si el usuario actual es SOLO designado (no responsable ni creador)
   const esUsuarioDesignado = () => {
@@ -1552,23 +1551,23 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                     value={
                       datosActuales?.proceso_id
                         ? {
-                            value: datosActuales.proceso_id,
-                            label: datosActuales?.proceso
-                              ? datosActuales.proceso.nombre
-                              : procesos.find(
-                                  (p) => p.id === datosActuales.proceso_id
-                                )?.nombre || "Proceso seleccionado",
-                          }
+                          value: datosActuales.proceso_id,
+                          label: datosActuales?.proceso
+                            ? datosActuales.proceso.nombre
+                            : procesos.find(
+                              (p) => p.id === datosActuales.proceso_id
+                            )?.nombre || "Proceso seleccionado",
+                        }
                         : null
                     }
                     options={(clienteSeleccionadoParaFiltro ||
-                    datosActuales?.cliente_id
+                      datosActuales?.cliente_id
                       ? procesos.filter(
-                          (p) =>
-                            p.cliente_id ===
-                            (clienteSeleccionadoParaFiltro ||
-                              datosActuales?.cliente_id)
-                        )
+                        (p) =>
+                          p.cliente_id ===
+                          (clienteSeleccionadoParaFiltro ||
+                            datosActuales?.cliente_id)
+                      )
                       : procesos
                     ).map((p) => ({
                       value: p.id,
@@ -1578,12 +1577,15 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                       actualizarCampo("proceso_id", option?.value || null)
                     }
                     placeholder={
-                      clienteSeleccionadoParaFiltro || datosActuales?.cliente_id
-                        ? "Procesos del cliente..."
-                        : "Buscar proceso..."
+                      datosActuales?._fromProceso
+                        ? "Proceso asignado"
+                        : clienteSeleccionadoParaFiltro || datosActuales?.cliente_id
+                          ? "Procesos del cliente..."
+                          : "Buscar proceso..."
                     }
-                    isClearable
-                    isSearchable
+                    isClearable={!datosActuales?._fromProceso}
+                    isSearchable={!datosActuales?._fromProceso}
+                    isDisabled={datosActuales?._fromProceso}
                     noOptionsMessage={({ inputValue }) => {
                       if (!inputValue) {
                         return "Escribe para buscar o crear proceso";
@@ -1602,8 +1604,10 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                         ...base,
                         minHeight: "32px",
                         fontSize: "14px",
-                        borderColor: "#e5e7eb",
+                        borderColor: datosActuales?._fromProceso ? "transparent" : "#e5e7eb",
                         borderRadius: "12px",
+                        backgroundColor: datosActuales?._fromProceso ? "#f9fafb" : "white",
+                        cursor: datosActuales?._fromProceso ? "not-allowed" : "pointer",
                       }),
                       menu: (base) => ({
                         ...base,
@@ -1627,13 +1631,13 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                     value={
                       datosActuales?.cliente_id
                         ? {
-                            value: datosActuales.cliente_id,
-                            label: datosActuales?.cliente
-                              ? datosActuales.cliente.nombre
-                              : clientes.find(
-                                  (c) => c.id === datosActuales.cliente_id
-                                )?.nombre || "Cliente seleccionado",
-                          }
+                          value: datosActuales.cliente_id,
+                          label: datosActuales?.cliente
+                            ? datosActuales.cliente.nombre
+                            : clientes.find(
+                              (c) => c.id === datosActuales.cliente_id
+                            )?.nombre || "Cliente seleccionado",
+                        }
                         : null
                     }
                     options={clientes.map((c) => ({
@@ -1648,15 +1652,15 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                       }
                     }}
                     placeholder={
-                      datosActuales?.proceso_id
+                      datosActuales?._fromProceso || datosActuales?.proceso_id
                         ? "Cliente del proceso"
                         : "Buscar cliente..."
                     }
-                    isClearable={!datosActuales?.proceso_id}
-                    isSearchable
-                    isDisabled={!!datosActuales?.proceso_id}
+                    isClearable={!datosActuales?._fromProceso && !datosActuales?.proceso_id}
+                    isSearchable={!datosActuales?._fromProceso}
+                    isDisabled={datosActuales?._fromProceso || !!datosActuales?.proceso_id}
                     noOptionsMessage={({ inputValue }) => {
-                      if (datosActuales?.proceso_id) {
+                      if (datosActuales?._fromProceso || datosActuales?.proceso_id) {
                         return "Cliente asignado por el proceso";
                       }
                       if (!inputValue) {
@@ -1678,10 +1682,10 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                         fontSize: "14px",
                         borderColor: "transparent",
                         borderRadius: "12px",
-                        backgroundColor: datosActuales?.proceso_id
+                        backgroundColor: (datosActuales?._fromProceso || datosActuales?.proceso_id)
                           ? "#f9fafb"
                           : "white",
-                        cursor: datosActuales?.proceso_id
+                        cursor: (datosActuales?._fromProceso || datosActuales?.proceso_id)
                           ? "not-allowed"
                           : "pointer",
                       }),
@@ -1767,7 +1771,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                     />
                     {!tarea?.id &&
                       usuarioActual?.roles_empleados?.nombre ===
-                        "Practicante" &&
+                      "Practicante" &&
                       (!datosActuales?.empleados_responsables ||
                         datosActuales.empleados_responsables.length === 0) && (
                         <div className="text-xs text-amber-600 font-medium flex items-center gap-1">
@@ -1865,10 +1869,10 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                           {debeSincronizarConCalendario(
                             datosActuales?.nombre
                           ) && (
-                            <span className="text-[10px] text-primary-600 font-medium">
-                              📅 Se sincronizará con Google Calendar
-                            </span>
-                          )}
+                              <span className="text-[10px] text-primary-600 font-medium">
+                                📅 Se sincronizará con Google Calendar
+                              </span>
+                            )}
                         </div>
 
                         {/* SIEMPRE mostrar selectores de hora */}
