@@ -121,7 +121,7 @@ export default function ColumnHeader({
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-[9999] bg-white border border-gray-200 shadow-xl rounded-lg py-1 min-w-[200px]"
+            className=" bg-white border border-gray-200 shadow-xl rounded-lg py-1 min-w-[200px]"
           >
             <button
               onClick={() => handleSort("asc")}

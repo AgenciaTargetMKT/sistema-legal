@@ -69,7 +69,7 @@ export default function DashboardLayout({ children }) {
   }
 
   return (
-    <div className="flex h-screen bg-linear-to-br from-gray-50 via-blue-50/30 to-gray-50">
+    <div className="flex h-screen bg-linear-to-br from-slate-50 via-blue-50 to-indigo-50">
       {/* Sidebar Component */}
       <Sidebar
         empleado={empleado}

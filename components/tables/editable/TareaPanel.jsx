@@ -71,59 +71,33 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
   // Inicializar cuando se abre el panel
   useEffect(() => {
     if (isOpen && !tarea?.id) {
-      // Modo creación: inicializar estado temporal
-
-      // Función asíncrona para cargar empleado actual y configurar responsable por defecto
-      const inicializarNuevaTarea = async () => {
-        let empleadoActualData = usuarioActual;
-        let empleadoActualId = usuarioActual?.id;
-
-        // Si no tenemos el usuario actual cargado, intentar cargarlo
-        if (!empleadoActualId) {
-          const {
-            data: { user },
-          } = await supabase.auth.getUser();
-          if (user) {
-            const { data: empleadoData } = await supabase
-              .from("empleados")
-              .select("id, nombre, apellido, email, roles_empleados(nombre)")
-              .eq("auth_user_id", user.id)
-              .single();
-
-            if (empleadoData) {
-              empleadoActualId = empleadoData.id;
-              empleadoActualData = empleadoData;
-              setUsuarioActual(empleadoData);
-            }
-          }
-        }
-
-        // Si viene desde un proceso, usar esos datos
-        setNuevaTareaTemp({
-          nombre: "",
-          descripcion: "",
-          notas: "",
-          importancia: "no importante",
-          urgencia: "no urgente",
-          fecha_vencimiento: null,
-          proceso_id: tarea?.proceso_id || null,
-          cliente_id: tarea?.cliente_id || null,
-          proceso: tarea?.proceso || null,
-          cliente: tarea?.cliente || null,
-          estado_id: null,
-          empleados_designados: [],
-          empleados_responsables: [],
-          _fromProceso: tarea?._fromProceso || false, // Mantener el marcador
-        });
-      };
-
-      inicializarNuevaTarea();
+      // 🚀 OPTIMIZACIÓN: Inicialización SÍNCRONA para apertura inmediata
+      // El estado temporal se crea inmediatamente con datos básicos
+      setNuevaTareaTemp({
+        nombre: "",
+        descripcion: "",
+        notas: "",
+        importancia: "no importante",
+        urgencia: "no urgente",
+        fecha_vencimiento: null,
+        proceso_id: tarea?.proceso_id || null,
+        cliente_id: tarea?.cliente_id || null,
+        proceso: tarea?.proceso || null,
+        cliente: tarea?.cliente || null,
+        estado_id: null,
+        empleados_designados: [],
+        empleados_responsables: usuarioActual ? [usuarioActual] : [],
+        _fromProceso: tarea?._fromProceso || false,
+      });
       setTituloLocal("");
       valorAnteriorTitulo.current = "";
       setPrefijoTarea("");
-      if (!catalogosCargados) {
-        cargarCatalogos();
-        cargarUsuarioActual();
+
+      // Si el usuario actual no está cargado, actualizamos después
+      if (!usuarioActual) {
+        cargarUsuarioActual().then(() => {
+          // El responsable se agregará cuando usuarioActual esté disponible
+        });
       }
     } else if (isOpen && tarea?.id) {
       // Modo edición: inicializar título solo la primera vez
@@ -133,10 +107,6 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
         valorAnteriorTitulo.current = tarea?.nombre || "";
       }
       setNuevaTareaTemp(null);
-      if (!catalogosCargados) {
-        cargarCatalogos();
-        cargarUsuarioActual();
-      }
       // Cargar empleados desde las tablas de relación
       cargarEmpleadosTarea(tarea.id);
     }
@@ -148,7 +118,32 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
       setTareaLocal(null);
       setPrefijoTarea(""); // Resetear prefijo al cerrar
     }
-  }, [isOpen, tarea?.id, tarea?.proceso_id, tarea?.cliente_id, tarea?._fromProceso]); // Escuchar cambios en los datos del proceso y cliente
+  }, [
+    isOpen,
+    tarea?.id,
+    tarea?.proceso_id,
+    tarea?.cliente_id,
+    tarea?._fromProceso,
+  ]); // Escuchar cambios en los datos del proceso y cliente
+
+  // 🚀 OPTIMIZACIÓN: Actualizar responsables cuando usuarioActual esté disponible
+  useEffect(() => {
+    if (usuarioActual && nuevaTareaTemp && !tarea?.id) {
+      // Solo actualizar si no tiene responsables asignados
+      if (!nuevaTareaTemp.empleados_responsables?.length) {
+        const esPracticante =
+          usuarioActual.roles_empleados?.nombre === "Practicante";
+
+        setNuevaTareaTemp((prev) => ({
+          ...prev,
+          empleados_responsables: esPracticante ? [] : [usuarioActual],
+          empleados_designados: esPracticante
+            ? [usuarioActual]
+            : prev.empleados_designados,
+        }));
+      }
+    }
+  }, [usuarioActual, nuevaTareaTemp, tarea?.id]);
 
   // Sincronizar título cuando tarea cambia (solo en modo edición y si el panel está abierto)
   useEffect(() => {
@@ -172,13 +167,14 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
     }
   }, [tarea?.nombre, isOpen, tarea?.id]);
 
-  // Cargar catálogos al inicializar el componente
+  // 🚀 OPTIMIZACIÓN: Cargar catálogos INMEDIATAMENTE al montar el componente
+  // Esto asegura que cuando el usuario haga clic en "Nueva Tarea", los datos ya estén listos
   useEffect(() => {
     if (!catalogosCargados) {
       cargarCatalogos();
       cargarUsuarioActual();
     }
-  }, [catalogosCargados]);
+  }, []); // Sin dependencias - solo al montar
 
   const cargarUsuarioActual = async () => {
     try {
@@ -636,21 +632,21 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
           const emp = empleados.find((e) => e.id === opt.value);
           return emp
             ? {
-              ...emp,
-              empleado_id: emp.id,
-              empleado: emp,
-            }
+                ...emp,
+                empleado_id: emp.id,
+                empleado: emp,
+              }
             : {
-              id: opt.value,
-              empleado_id: opt.value,
-              nombre: opt.label.split(" ")[0],
-              apellido: opt.label.split(" ").slice(1).join(" "),
-              empleado: {
                 id: opt.value,
+                empleado_id: opt.value,
                 nombre: opt.label.split(" ")[0],
                 apellido: opt.label.split(" ").slice(1).join(" "),
-              },
-            };
+                empleado: {
+                  id: opt.value,
+                  nombre: opt.label.split(" ")[0],
+                  apellido: opt.label.split(" ").slice(1).join(" "),
+                },
+              };
         });
 
         // Actualizar estado local inmediatamente para UI
@@ -1186,7 +1182,8 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                 errorData
               );
               toast.error(
-                `Tarea creada, pero no se pudo crear evento en calendario: ${errorData.error || "Error desconocido"
+                `Tarea creada, pero no se pudo crear evento en calendario: ${
+                  errorData.error || "Error desconocido"
                 }`
               );
             } else {
@@ -1234,7 +1231,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
   const tareaFinalizada =
     datosActuales?.estado?.nombre === "finalizado" ||
     estados.find((e) => e.id === datosActuales?.estado_id)?.nombre ===
-    "finalizado";
+      "finalizado";
 
   // Verificar si el usuario actual es SOLO designado (no responsable ni creador)
   const esUsuarioDesignado = () => {
@@ -1254,32 +1251,33 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
 
   const soloDesignado = esUsuarioDesignado();
 
-  // No renderizar si el panel está cerrado O si no hay datos
-  if (!isOpen || !datosActuales) return null;
+  // 🚀 OPTIMIZACIÓN: Siempre renderizar el portal, pero el contenido animado controla la visibilidad
+  // Esto evita re-montar el componente cada vez que se abre
 
   const panelContent = (
     <>
-      {/* Overlay con animación */}
+      {/* Overlay con animación rápida */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/30 z-9998 transition-opacity backdrop-blur-[1px]"
+            className="fixed inset-0 bg-black/30 z-9998"
           />
         )}
       </AnimatePresence>
 
       {/* Panel con animación slide */}
       <AnimatePresence>
-        {isOpen && (
+        {isOpen && datosActuales && (
           <motion.div
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            initial={{ x: "100%", opacity: 0.5 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: "100%", opacity: 0 }}
+            transition={{ type: "tween", duration: 0.2, ease: "easeOut" }}
             className="fixed right-0 top-0 h-full w-[900px] bg-white shadow-2xl z-9999 overflow-y-auto"
           >
             {/* Header minimalista */}
@@ -1551,23 +1549,23 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                     value={
                       datosActuales?.proceso_id
                         ? {
-                          value: datosActuales.proceso_id,
-                          label: datosActuales?.proceso
-                            ? datosActuales.proceso.nombre
-                            : procesos.find(
-                              (p) => p.id === datosActuales.proceso_id
-                            )?.nombre || "Proceso seleccionado",
-                        }
+                            value: datosActuales.proceso_id,
+                            label: datosActuales?.proceso
+                              ? datosActuales.proceso.nombre
+                              : procesos.find(
+                                  (p) => p.id === datosActuales.proceso_id
+                                )?.nombre || "Proceso seleccionado",
+                          }
                         : null
                     }
                     options={(clienteSeleccionadoParaFiltro ||
-                      datosActuales?.cliente_id
+                    datosActuales?.cliente_id
                       ? procesos.filter(
-                        (p) =>
-                          p.cliente_id ===
-                          (clienteSeleccionadoParaFiltro ||
-                            datosActuales?.cliente_id)
-                      )
+                          (p) =>
+                            p.cliente_id ===
+                            (clienteSeleccionadoParaFiltro ||
+                              datosActuales?.cliente_id)
+                        )
                       : procesos
                     ).map((p) => ({
                       value: p.id,
@@ -1579,9 +1577,10 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                     placeholder={
                       datosActuales?._fromProceso
                         ? "Proceso asignado"
-                        : clienteSeleccionadoParaFiltro || datosActuales?.cliente_id
-                          ? "Procesos del cliente..."
-                          : "Buscar proceso..."
+                        : clienteSeleccionadoParaFiltro ||
+                          datosActuales?.cliente_id
+                        ? "Procesos del cliente..."
+                        : "Buscar proceso..."
                     }
                     isClearable={!datosActuales?._fromProceso}
                     isSearchable={!datosActuales?._fromProceso}
@@ -1604,10 +1603,16 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                         ...base,
                         minHeight: "32px",
                         fontSize: "14px",
-                        borderColor: datosActuales?._fromProceso ? "transparent" : "#e5e7eb",
+                        borderColor: datosActuales?._fromProceso
+                          ? "transparent"
+                          : "#e5e7eb",
                         borderRadius: "12px",
-                        backgroundColor: datosActuales?._fromProceso ? "#f9fafb" : "white",
-                        cursor: datosActuales?._fromProceso ? "not-allowed" : "pointer",
+                        backgroundColor: datosActuales?._fromProceso
+                          ? "#f9fafb"
+                          : "white",
+                        cursor: datosActuales?._fromProceso
+                          ? "not-allowed"
+                          : "pointer",
                       }),
                       menu: (base) => ({
                         ...base,
@@ -1631,13 +1636,13 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                     value={
                       datosActuales?.cliente_id
                         ? {
-                          value: datosActuales.cliente_id,
-                          label: datosActuales?.cliente
-                            ? datosActuales.cliente.nombre
-                            : clientes.find(
-                              (c) => c.id === datosActuales.cliente_id
-                            )?.nombre || "Cliente seleccionado",
-                        }
+                            value: datosActuales.cliente_id,
+                            label: datosActuales?.cliente
+                              ? datosActuales.cliente.nombre
+                              : clientes.find(
+                                  (c) => c.id === datosActuales.cliente_id
+                                )?.nombre || "Cliente seleccionado",
+                          }
                         : null
                     }
                     options={clientes.map((c) => ({
@@ -1656,11 +1661,18 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                         ? "Cliente del proceso"
                         : "Buscar cliente..."
                     }
-                    isClearable={!datosActuales?._fromProceso && !datosActuales?.proceso_id}
+                    isClearable={
+                      !datosActuales?._fromProceso && !datosActuales?.proceso_id
+                    }
                     isSearchable={!datosActuales?._fromProceso}
-                    isDisabled={datosActuales?._fromProceso || !!datosActuales?.proceso_id}
+                    isDisabled={
+                      datosActuales?._fromProceso || !!datosActuales?.proceso_id
+                    }
                     noOptionsMessage={({ inputValue }) => {
-                      if (datosActuales?._fromProceso || datosActuales?.proceso_id) {
+                      if (
+                        datosActuales?._fromProceso ||
+                        datosActuales?.proceso_id
+                      ) {
                         return "Cliente asignado por el proceso";
                       }
                       if (!inputValue) {
@@ -1682,12 +1694,16 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                         fontSize: "14px",
                         borderColor: "transparent",
                         borderRadius: "12px",
-                        backgroundColor: (datosActuales?._fromProceso || datosActuales?.proceso_id)
-                          ? "#f9fafb"
-                          : "white",
-                        cursor: (datosActuales?._fromProceso || datosActuales?.proceso_id)
-                          ? "not-allowed"
-                          : "pointer",
+                        backgroundColor:
+                          datosActuales?._fromProceso ||
+                          datosActuales?.proceso_id
+                            ? "#f9fafb"
+                            : "white",
+                        cursor:
+                          datosActuales?._fromProceso ||
+                          datosActuales?.proceso_id
+                            ? "not-allowed"
+                            : "pointer",
                       }),
                       menu: (base) => ({
                         ...base,
@@ -1771,7 +1787,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                     />
                     {!tarea?.id &&
                       usuarioActual?.roles_empleados?.nombre ===
-                      "Practicante" &&
+                        "Practicante" &&
                       (!datosActuales?.empleados_responsables ||
                         datosActuales.empleados_responsables.length === 0) && (
                         <div className="text-xs text-amber-600 font-medium flex items-center gap-1">
@@ -1869,10 +1885,10 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                           {debeSincronizarConCalendario(
                             datosActuales?.nombre
                           ) && (
-                              <span className="text-[10px] text-primary-600 font-medium">
-                                📅 Se sincronizará con Google Calendar
-                              </span>
-                            )}
+                            <span className="text-[10px] text-primary-600 font-medium">
+                              📅 Se sincronizará con Google Calendar
+                            </span>
+                          )}
                         </div>
 
                         {/* SIEMPRE mostrar selectores de hora */}

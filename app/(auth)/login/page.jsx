@@ -42,7 +42,7 @@ export default function LoginPage() {
 
       if (data?.session) {
         // Redirigir al home
-        window.location.href = "/home";
+        window.location.href = "/tareas";
       } else {
         setError("No se pudo establecer la sesión");
         setLoading(false);
@@ -55,7 +55,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-slate-50 to-slate-100 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-slate-50 via-blue-50 to-indigo-50 py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md shadow-xl rounded-3xl">
         <CardHeader className="space-y-1 text-center">
           <CardTitle className="text-3xl font-bold">Sistema Legal</CardTitle>
@@ -64,8 +64,8 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
 
-        <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
+        <CardContent className="px-8 pb-8">
+          <form onSubmit={handleLogin} className="space-y-6">
             {error && (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
                 <AlertCircle className="h-4 w-4 shrink-0" />
@@ -93,32 +93,29 @@ export default function LoginPage() {
                 id="password"
                 name="password"
                 type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 placeholder="••••••••"
                 required
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, "");
+                  setPassword(value);
+                }}
                 disabled={loading}
               />
             </div>
 
-            <Button
-              type="submit"
-              className="w-full"
-              size="lg"
-              disabled={loading}
-            >
-              {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
-            </Button>
-
-            <p className="text-center text-sm text-muted-foreground">
-              ¿No tienes cuenta?{" "}
-              <a
-                href="/register"
-                className="font-medium text-primary hover:underline"
+            <div className="flex justify-center pt-2">
+              <Button
+                type="submit"
+                className="px-12 bg-primary-600 hover:bg-primary-700 text-white"
+                size="lg"
+                disabled={loading}
               >
-                Regístrate aquí
-              </a>
-            </p>
+                {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>

@@ -167,7 +167,6 @@ export default function TareasTable({
     };
   }, []);
 
-  // Realtime subscription para tareas
   useEffect(() => {
     const channel = supabase
       .channel("tareas-changes")
@@ -180,34 +179,13 @@ export default function TareasTable({
         },
         async (payload) => {
           if (payload.eventType === "INSERT") {
-            // Cuando se inserta una nueva tarea, obtener sus datos completos
-            const { data: nuevaTarea } = await supabase
-              .from("tareas")
-              .select(
-                `
-                *,
-                proceso:procesos(id, nombre),
-                estado:estados_tarea(id, nombre, color, categoria),
-                cliente:clientes(id, nombre),
-                empleados_designados:tareas_empleados_designados(empleado:empleados(id, nombre, apellido)),
-                empleados_responsables:tareas_empleados_responsables(empleado:empleados(id, nombre, apellido))
-              `
-              )
-              .eq("id", payload.new.id)
-              .single();
-
-            if (nuevaTarea) {
-              setTareas((prev) => {
-                const newTareas = [...prev, nuevaTarea];
-                // Notificar al padre después del render
-                setTimeout(() => {
-                  onTareasChange?.(newTareas);
-                }, 0);
-                return newTareas;
-              });
-            }
+            onUpdate?.();
           } else if (payload.eventType === "UPDATE") {
-            // Fetch completo de la tarea con sus relaciones
+            const tareaExiste = tareas.some((t) => t.id === payload.new.id);
+            if (!tareaExiste) {
+              return;
+            }
+
             const { data: tareaActualizada } = await supabase
               .from("tareas")
               .select(
@@ -238,8 +216,6 @@ export default function TareasTable({
                 if (index === -1) return prev;
                 const newTareas = [...prev];
                 newTareas[index] = tareaActualizada;
-
-                // ✅ Notificar al padre DESPUÉS del render para evitar error de React
                 setTimeout(() => {
                   onTareasChange?.(newTareas);
                 }, 0);
@@ -290,8 +266,6 @@ export default function TareasTable({
           } else if (payload.eventType === "DELETE") {
             setTareas((prev) => {
               const newTareas = prev.filter((t) => t.id !== payload.old.id);
-
-              // ✅ IMPORTANTE: Notificar al padre que las tareas cambiaron
               onTareasChange?.(newTareas);
 
               return newTareas;
@@ -450,9 +424,6 @@ export default function TareasTable({
 
               // Si antes no sincronizaba, crear evento nuevo (conversión detectada)
               if (!sincronizabaAntes) {
-                console.log(
-                  "🔄 Creando evento en Google Calendar (conversión a VENCIMIENTO/AUDIENCIA)"
-                );
                 await fetch("/api/calendar/events/create", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -465,8 +436,6 @@ export default function TareasTable({
                   }),
                 });
               } else {
-                // Si ya sincronizaba, solo actualizar el título
-                console.log("🔄 Actualizando título en Google Calendar");
                 await fetch("/api/calendar/events/update", {
                   method: "PUT",
                   headers: { "Content-Type": "application/json" },
@@ -714,77 +683,17 @@ export default function TareasTable({
   };
 
   return (
-    <div className="w-full space-y-3">
-      {/* Controles superiores: Paginación y acciones */}
-      <div className="flex items-center justify-end">
-        {/* Paginación y selector de elementos */}
-        {!hideControls && tareas.length > 0 && (
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Mostrar:</span>
-              <select
-                value={elementosPorPagina}
-                onChange={(e) =>
-                  cambiarElementosPorPagina(Number(e.target.value))
-                }
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none bg-white"
-              >
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-            </div>
-
-            <span className="text-sm text-gray-600">
-              {indexPrimero + 1}-{Math.min(indexUltimo, tareas.length)} de{" "}
-              {tareas.length}
-            </span>
-
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => cambiarPagina(paginaActual - 1)}
-                disabled={paginaActual === 1}
-                className={clsx(
-                  "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
-                  paginaActual === 1
-                    ? "text-gray-400 cursor-not-allowed"
-                    : "text-gray-700 hover:bg-gray-100"
-                )}
-              >
-                ←
-              </button>
-
-              <span className="px-3 py-1.5 text-sm font-medium text-gray-700">
-                {paginaActual} / {totalPaginas}
-              </span>
-
-              <button
-                onClick={() => cambiarPagina(paginaActual + 1)}
-                disabled={paginaActual === totalPaginas}
-                className={clsx(
-                  "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
-                  paginaActual === totalPaginas
-                    ? "text-gray-400 cursor-not-allowed"
-                    : "text-gray-700 hover:bg-gray-100"
-                )}
-              >
-                →
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
+    <div className="w-full space-y-4">
       {/* Barra de selección múltiple */}
       {seleccionadas.size > 0 && (
-        <div className="px-4 py-2 bg-primary-50 border border-primary-200 rounded-lg flex items-center justify-between">
-          <span className="text-sm text-primary-900 font-medium">
+        <div className="px-5 py-3 bg-linear-to-r from-primary-50 to-blue-50 border border-primary-200 rounded-xl flex items-center justify-between shadow-sm">
+          <span className="text-sm text-primary-900 font-semibold">
             {seleccionadas.size} tarea{seleccionadas.size !== 1 ? "s" : ""}{" "}
             seleccionada{seleccionadas.size !== 1 ? "s" : ""}
           </span>
           <button
             onClick={eliminarSeleccionadas}
-            className="flex items-center gap-2 px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all shadow-sm hover:shadow-md text-sm font-medium"
           >
             <Trash2 className="h-4 w-4" />
             Eliminar
@@ -793,16 +702,16 @@ export default function TareasTable({
       )}
 
       {/* Tabla */}
-      <div className="w-full overflow-auto bg-white rounded-lg shadow-sm border">
+      <div className="w-full overflow-auto bg-white rounded-lg shadow-sm border border-gray-200">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
         >
           <table className="w-full border-collapse">
-            <thead className="bg-gray-50 sticky top-0 z-10">
+            <thead className="bg-linear-to-r from-slate-50 via-blue-50 to-indigo-50 sticky top-0 z-10 border-b-2 border-gray-200">
               <tr>
-                <th className="px-1 py-2 text-center text-xs font-semibold text-gray-700 border-b w-8">
+                <th className="px-2 py-2.5 text-center text-xs font-bold text-gray-700 w-8">
                   <input
                     type="checkbox"
                     checked={
@@ -818,7 +727,7 @@ export default function TareasTable({
                     className="cursor-pointer w-4 h-4"
                   />
                 </th>
-                <th className="px-1 py-2 text-center text-xs font-semibold text-gray-700 border-b w-8">
+                <th className="px-2 py-2.5 text-center text-xs font-bold text-gray-700 w-8">
                   <GripVertical className="w-4 h-4 mx-auto text-gray-400" />
                 </th>
                 <ColumnHeader
@@ -827,7 +736,7 @@ export default function TareasTable({
                   onSort={handleSort}
                   currentSort={sortConfig}
                 />
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-600 border-b border-r w-32">
+                <th className="px-3 py-2.5 text-left text-xs font-bold text-gray-700 border-r border-gray-200 w-32">
                   <div className="flex items-center gap-2">
                     <span>Estado</span>
                   </div>
@@ -885,14 +794,14 @@ export default function TareasTable({
               </tbody>
             </SortableContext>
             <tbody>
-              <tr className="border-b hover:bg-gray-50 group">
-                <td colSpan="9" className="px-3 py-2">
+              <tr className="hover:bg-blue-50/20 group">
+                <td colSpan="9" className="px-3 py-2.5">
                   <button
                     onClick={crearNuevaTarea}
-                    className="w-full text-left text-sm font-normal text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-2"
+                    className="w-full text-left text-sm text-gray-400 hover:text-primary-600 transition-colors flex items-center gap-2 py-1"
                   >
-                    <span className="text-lg font-normal">+</span>
-                    <span className="font-normal">Agregar tarea</span>
+                    <span className="text-base">+</span>
+                    <span>Agregar tarea</span>
                   </button>
                 </td>
               </tr>
@@ -900,6 +809,90 @@ export default function TareasTable({
           </table>
         </DndContext>
       </div>
+
+      {/* Paginación inferior - Compacta */}
+      {!hideControls && tareas.length > 0 && (
+        <div className="flex items-center justify-between px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm">
+          {/* Selector e info */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-600">Mostrar</span>
+            <select
+              value={elementosPorPagina}
+              onChange={(e) =>
+                cambiarElementosPorPagina(Number(e.target.value))
+              }
+              className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:ring-1 focus:ring-primary-400 focus:border-primary-400 outline-none bg-white hover:border-gray-400 transition-colors"
+            >
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <span className="text-xs text-gray-500">
+              {indexPrimero + 1}-{Math.min(indexUltimo, tareas.length)} de{" "}
+              {tareas.length}
+            </span>
+          </div>
+
+          {/* Controles de navegación */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => cambiarPagina(paginaActual - 1)}
+              disabled={paginaActual === 1}
+              className={clsx(
+                "p-1.5 text-xs rounded-md transition-colors",
+                paginaActual === 1
+                  ? "text-gray-300 cursor-not-allowed"
+                  : "text-gray-600 hover:bg-gray-100 hover:text-primary-600"
+              )}
+              title="Anterior"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
+            </button>
+
+            <span className="px-3 py-1 text-xs font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-md">
+              {paginaActual} / {totalPaginas}
+            </span>
+
+            <button
+              onClick={() => cambiarPagina(paginaActual + 1)}
+              disabled={paginaActual === totalPaginas}
+              className={clsx(
+                "p-1.5 text-xs rounded-md transition-colors",
+                paginaActual === totalPaginas
+                  ? "text-gray-300 cursor-not-allowed"
+                  : "text-gray-600 hover:bg-gray-100 hover:text-primary-600"
+              )}
+              title="Siguiente"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -938,8 +931,8 @@ function SortableRow({
       ref={setNodeRef}
       style={style}
       className={clsx(
-        "border-b hover:bg-gray-50 group",
-        estaFinalizada && "bg-green-50 opacity-75"
+        "border-b border-gray-100 hover:bg-blue-50/30 group transition-colors",
+        estaFinalizada && "bg-green-50/50 opacity-70"
       )}
     >
       <td className="px-1 py-1.5 text-center border-r">
@@ -973,10 +966,11 @@ function SortableRow({
         value={tarea.nombre}
         onChange={(val) => actualizarCelda(tarea.id, "nombre", val)}
         disabled={estaFinalizada}
+        bold={true}
         iconButton={
           <button
             onClick={() => onTareaClick?.(tarea)}
-            className="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-gray-500 hover:text-primary-600 hover:bg-gray-50 rounded transition-colors"
+            className="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-primary-600  rounded-md transition-all opacity-0 group-hover:opacity-100"
             title="Abrir panel de detalles"
           >
             <PanelRightOpen className="h-3.5 w-3.5" />
@@ -1042,6 +1036,7 @@ function TextCell({
   className,
   iconButton,
   disabled = false,
+  bold = false,
 }) {
   const [editing, setEditing] = useState(false);
   const [currentValue, setCurrentValue] = useState(value || "");
@@ -1098,10 +1093,13 @@ function TextCell({
               "flex-1 px-2 py-0.5 text-xs rounded transition-colors min-h-6 flex items-center",
               disabled
                 ? "cursor-not-allowed text-gray-500"
-                : "hover:bg-gray-100 cursor-text"
+                : "hover:bg-gray-100 cursor-text",
+              bold && "font-semibold text-gray-900"
             )}
           >
-            {currentValue || <span className="text-gray-400">Vacío</span>}
+            {currentValue || (
+              <span className="text-gray-400 font-normal">Vacío</span>
+            )}
           </div>
         )}
         {iconButton}

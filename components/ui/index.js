@@ -20,3 +20,15 @@ export {
 } from "./dialog";
 export { Input } from "./input";
 export { Label } from "./label";
+export { Popover, PopoverTrigger, PopoverContent } from "./popover";
+export {
+  Command,
+  CommandDialog,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandSeparator,
+  CommandShortcut,
+} from "./command";

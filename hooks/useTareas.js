@@ -1,17 +1,24 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import toast from "react-hot-toast";
 
 export function useTareas(options = {}) {
   const queryClient = useQueryClient();
   const channelRef = useRef(null);
+  const isSubscribedRef = useRef(false);
+
+  // Función para refetch que será estable
+  const forceRefetch = useCallback(() => {
+    console.log("🔄 Forzando refetch de tareas...");
+    queryClient.invalidateQueries({ queryKey: ["tareas"] });
+    queryClient.refetchQueries({ queryKey: ["tareas"], type: "active" });
+  }, [queryClient]);
 
   const query = useQuery({
     queryKey: ["tareas"],
     queryFn: async () => {
-      console.log("🔄 Cargando tareas desde DB...");
-
+      console.log("📊 Fetching tareas...");
       const { data, error } = await supabase
         .from("tareas")
         .select(
@@ -27,67 +34,61 @@ export function useTareas(options = {}) {
         .order("orden", { ascending: true });
 
       if (error) throw error;
-
-      console.log(`✅ ${data?.length || 0} tareas cargadas`);
+      console.log("📊 Tareas fetched:", data?.length);
       return data || [];
     },
-    staleTime: 2 * 60 * 1000, // 2 minutos - caché activo
-    gcTime: 10 * 60 * 1000, // 10 minutos en memoria
+    staleTime: 0,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: true,
     ...options,
   });
 
-  // 🔥 REALTIME: Escucha cambios en tablas y actualiza caché
+  // 🔥 REALTIME: Escucha cambios en tablas
   useEffect(() => {
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
+    // Evitar suscripciones duplicadas
+    if (isSubscribedRef.current) {
+      return;
     }
 
+    // Limpiar canal previo si existe
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
+    // Crear canal único con timestamp para evitar conflictos
+    const channelName = `tareas-realtime-${Date.now()}`;
+    console.log("🔌 Creando canal:", channelName);
+
     const channel = supabase
-      .channel("tareas-realtime")
-      // Cambios en tabla tareas
+      .channel(channelName)
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "tareas",
-        },
+        { event: "*", schema: "public", table: "tareas" },
         (payload) => {
-          console.log(`🔥 [${payload.eventType}] Tarea cambiada`);
+          console.log(
+            `🔥 [TAREAS ${payload.eventType}]`,
+            payload.new?.nombre || payload.old?.id
+          );
+          forceRefetch();
 
-          // Invalidar caché = React Query recarga automático
-          queryClient.invalidateQueries({
-            queryKey: ["tareas"],
-            refetchType: "active", // Solo recarga si hay componentes viéndolo
-          });
-
-          // Notificaciones
           if (payload.eventType === "INSERT") {
             toast.success("Nueva tarea creada", { duration: 2000, icon: "➕" });
           } else if (payload.eventType === "UPDATE") {
-            toast.info("Tarea actualizada", { duration: 1500, icon: "✏️" });
+            toast("Tarea actualizada", { duration: 1500, icon: "✏️" });
           } else if (payload.eventType === "DELETE") {
             toast.error("Tarea eliminada", { duration: 2000, icon: "🗑️" });
           }
         }
       )
-      // Cambios en empleados designados
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "tareas_empleados_designados",
-        },
+        { event: "*", schema: "public", table: "tareas_empleados_designados" },
         () => {
-         
-          queryClient.invalidateQueries({
-            queryKey: ["tareas"],
-            refetchType: "active",
-          });
+          console.log("🔥 [DESIGNADOS] Cambio detectado");
+          forceRefetch();
         }
       )
-      // Cambios en empleados responsables
       .on(
         "postgres_changes",
         {
@@ -96,47 +97,44 @@ export function useTareas(options = {}) {
           table: "tareas_empleados_responsables",
         },
         () => {
-          console.log("🔥 Empleado responsable cambió");
-          queryClient.invalidateQueries({
-            queryKey: ["tareas"],
-            refetchType: "active",
-          });
+          console.log("🔥 [RESPONSABLES] Cambio detectado");
+          forceRefetch();
         }
       )
-      // Cambios en estados (afecta las tareas)
       .on(
         "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "estados_tarea",
-        },
+        { event: "UPDATE", schema: "public", table: "estados_tarea" },
         () => {
-          
-          queryClient.invalidateQueries({
-            queryKey: ["tareas"],
-            refetchType: "active",
-          });
+          console.log("🔥 [ESTADOS] Cambio detectado");
+          forceRefetch();
         }
       )
-      .subscribe((status) => {
+      .subscribe((status, err) => {
+        console.log("📡 Estado del canal:", status, err || "");
         if (status === "SUBSCRIBED") {
-        
+          console.log("✅ Canal realtime CONECTADO");
+          isSubscribedRef.current = true;
         } else if (status === "CHANNEL_ERROR") {
-          console.error("❌ Error en canal realtime");
+          console.error("❌ Error en canal realtime:", err);
+          isSubscribedRef.current = false;
+        } else if (status === "CLOSED") {
+          console.log("🔌 Canal cerrado");
+          isSubscribedRef.current = false;
         }
       });
 
     channelRef.current = channel;
 
-    // Cleanup al desmontar
+    // Cleanup
     return () => {
+      console.log("🧹 Limpiando canal realtime...");
+      isSubscribedRef.current = false;
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
-       
+        channelRef.current = null;
       }
     };
-  }, [queryClient]);
+  }, [forceRefetch]);
 
   return query;
 }

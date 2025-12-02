@@ -67,7 +67,7 @@ const HeaderComponent = ({ onMenuClick, empleado }) => {
       initial={{ y: -20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.3 }}
-      className="sticky top-0 z-30 p-4 md:px-6"
+      className="sticky top-0 z-30 pt-4 px-4 md:px-6"
     >
       <motion.div
         initial={{ scale: 0.95 }}
