@@ -170,8 +170,6 @@ export default function EmpleadosPage() {
         throw new Error("No hay sesión activa");
       }
 
-      console.log("=== ELIMINANDO USUARIO AUTH ===");
-      console.log("Usuario target:", authUserId);
 
       const response = await fetch(
         `${SUPABASE_FUNCTIONS_URL}/create-empleado-auth`,
@@ -188,8 +186,7 @@ export default function EmpleadosPage() {
         }
       );
 
-      console.log("Respuesta de eliminación:", response.status);
-
+  
       if (!response.ok) {
         const errorText = await response.text();
         console.error("Error response:", errorText);
