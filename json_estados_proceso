@@ -1,0 +1,222 @@
+[
+  {
+    "id": "53f5ddde-bc3e-4211-bb0b-62bf20b6f653",
+    "nombre": "Pendiente de info cliente",
+    "descripcion": "Pendiente de Info del Cliente",
+    "color": "#F59E0B",
+    "orden": 2,
+    "activo": true,
+    "created_at": "2025-11-05 20:32:43.703393+00",
+    "categoria": "Pendiente"
+  },
+  {
+    "id": "882764b8-7024-4e98-9d10-674f5711c637",
+    "nombre": "Para conlusión",
+    "descripcion": "Para Conclusión",
+    "color": "#8B5CF6",
+    "orden": 4,
+    "activo": true,
+    "created_at": "2025-11-05 20:32:43.703393+00",
+    "categoria": "Pendiente"
+  },
+  {
+    "id": "e6ee6d06-a058-4da2-8d05-4f45b642d670",
+    "nombre": "Redactando demanda",
+    "descripcion": "Redactando Demanda",
+    "color": "#3B82F6",
+    "orden": 3,
+    "activo": true,
+    "created_at": "2025-11-05 20:32:43.703393+00",
+    "categoria": "Pendiente"
+  },
+  {
+    "id": "96f3fe40-da8f-451b-86c3-2459b6704aee",
+    "nombre": "Para ejecución forzada",
+    "descripcion": "Para Ejecución Forzada",
+    "color": "#EF4444",
+    "orden": 1,
+    "activo": true,
+    "created_at": "2025-11-05 20:32:43.703393+00",
+    "categoria": "En_curso"
+  },
+  {
+    "id": "0dde95e8-2b65-47be-963b-6ca8264dfb8e",
+    "nombre": "Por resolver",
+    "descripcion": "Por Resolver",
+    "color": "#10B981",
+    "orden": 5,
+    "activo": true,
+    "created_at": "2025-11-05 20:32:43.703393+00",
+    "categoria": "En_curso"
+  },
+  {
+    "id": "5c60a33d-2812-486c-accf-945f90e97825",
+    "nombre": "Para admisorio",
+    "descripcion": "Para Admisorio",
+    "color": "#06B6D4",
+    "orden": 6,
+    "activo": true,
+    "created_at": "2025-11-05 20:32:43.703393+00",
+    "categoria": "En_curso"
+  },
+  {
+    "id": "5bd9644d-cb23-4725-b0c0-e7f11dd163dd",
+    "nombre": "Para contestación",
+    "descripcion": "Para Contestación",
+    "color": "#EC4899",
+    "orden": 7,
+    "activo": true,
+    "created_at": "2025-11-05 20:32:43.703393+00",
+    "categoria": "En_curso"
+  },
+  {
+    "id": "1fc2141f-e692-4602-933a-6f3002a5603c",
+    "nombre": "Para subsanación",
+    "descripcion": "Para Subsanación",
+    "color": "#F97316",
+    "orden": 8,
+    "activo": true,
+    "created_at": "2025-11-05 20:32:43.703393+00",
+    "categoria": "En_curso"
+  },
+  {
+    "id": "a3cb3c5e-3a26-46c4-bed7-1cbe0d37ac42",
+    "nombre": "Para audiencia",
+    "descripcion": "Para Audiencia",
+    "color": "#84CC16",
+    "orden": 9,
+    "activo": true,
+    "created_at": "2025-11-05 20:32:43.703393+00",
+    "categoria": "En_curso"
+  },
+  {
+    "id": "b1e0659c-8db0-4e1d-957b-bdb559712743",
+    "nombre": "Para casación",
+    "descripcion": null,
+    "color": "#F97316",
+    "orden": 10,
+    "activo": true,
+    "created_at": "2025-11-12 17:44:04.370569+00",
+    "categoria": "En_curso"
+  },
+  {
+    "id": "3944ec17-2684-4fd5-85de-d3744e36657a",
+    "nombre": "Para sentencia",
+    "descripcion": null,
+    "color": null,
+    "orden": 11,
+    "activo": true,
+    "created_at": "2025-11-25 15:21:10.24162+00",
+    "categoria": "En_curso"
+  },
+  {
+    "id": "7a7ddc52-c897-46d7-96cd-b74158d975fd",
+    "nombre": "Para sentencia de vista",
+    "descripcion": null,
+    "color": null,
+    "orden": 12,
+    "activo": true,
+    "created_at": "2025-11-25 15:21:40.518049+00",
+    "categoria": "En_curso"
+  },
+  {
+    "id": "999a283e-bb6e-40e8-bb84-f47a8b092a1d",
+    "nombre": "Para ejecución forzada\n",
+    "descripcion": null,
+    "color": null,
+    "orden": 13,
+    "activo": true,
+    "created_at": "2025-11-25 15:22:51.610478+00",
+    "categoria": "En_curso"
+  },
+  {
+    "id": "24e2c83f-6a1c-4ba9-9325-695d49e43b5f",
+    "nombre": "Para medida cautelar",
+    "descripcion": null,
+    "color": null,
+    "orden": 14,
+    "activo": true,
+    "created_at": "2025-11-25 15:22:26.974811+00",
+    "categoria": "En_curso"
+  },
+  {
+    "id": "02ded2a9-0d6f-41cd-8504-402a557c740c",
+    "nombre": "Para concesorio apelación",
+    "descripcion": null,
+    "color": null,
+    "orden": 15,
+    "activo": true,
+    "created_at": "2025-11-25 15:20:25.810104+00",
+    "categoria": "En_curso"
+  },
+  {
+    "id": "cd18e95f-bfd0-4b24-ae36-b6fbce803bab",
+    "nombre": "Demanada/Contestación fundada",
+    "descripcion": null,
+    "color": null,
+    "orden": 16,
+    "activo": true,
+    "created_at": "2025-11-25 15:29:05.781824+00",
+    "categoria": "Completado"
+  },
+  {
+    "id": "69a9adc5-094c-4b6e-8d10-8aaf0cc73121",
+    "nombre": "Demanda/Constestación infundada",
+    "descripcion": null,
+    "color": null,
+    "orden": 17,
+    "activo": true,
+    "created_at": "2025-11-25 15:30:54.659944+00",
+    "categoria": "Completado"
+  },
+  {
+    "id": "093f560e-336e-4df6-bc13-1d3c3480d3c8",
+    "nombre": "Demanda/Contestación fundada en parte",
+    "descripcion": null,
+    "color": null,
+    "orden": 18,
+    "activo": true,
+    "created_at": "2025-11-25 15:30:09.224708+00",
+    "categoria": "Completado"
+  },
+  {
+    "id": "a814e375-472b-4699-be8f-c5fd761b358b",
+    "nombre": "Archivo Definitivo",
+    "descripcion": null,
+    "color": null,
+    "orden": 19,
+    "activo": true,
+    "created_at": "2025-11-25 15:28:23.07721+00",
+    "categoria": "Completado"
+  },
+  {
+    "id": "1a789f64-8d79-4d3e-9423-09cfaf61342f",
+    "nombre": "Acuerdo Conciliatorio",
+    "descripcion": null,
+    "color": null,
+    "orden": 20,
+    "activo": true,
+    "created_at": "2025-11-25 15:28:06.713654+00",
+    "categoria": "Completado"
+  },
+  {
+    "id": "75b44515-2cb3-475d-8ecb-d36dee61878e",
+    "nombre": "Transacción Extrajudicial",
+    "descripcion": null,
+    "color": null,
+    "orden": 21,
+    "activo": true,
+    "created_at": "2025-11-25 15:27:42.151938+00",
+    "categoria": "Completado"
+  },
+  {
+    "id": "081d1ed4-3a5e-4ffe-8661-febf59248495",
+    "nombre": "Allanamiento",
+    "descripcion": null,
+    "color": null,
+    "orden": 22,
+    "activo": true,
+    "created_at": "2025-11-25 15:23:56.594294+00",
+    "categoria": "Completado"
+  }
+]
