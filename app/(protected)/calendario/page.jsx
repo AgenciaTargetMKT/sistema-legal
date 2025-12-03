@@ -9,6 +9,7 @@ import esLocale from "@fullcalendar/core/locales/es";
 import { FullCalendarWidget } from "../../../components/features/calendario/full-calendar-widget";
 import TodayDayView from "../../../components/features/calendario/today-day-view";
 import { Card, CardContent } from "@/components/ui/card";
+import { Calendar } from "lucide-react";
 
 export default function CalendarioPage() {
   const [events, setEvents] = useState([]);
@@ -78,11 +79,11 @@ export default function CalendarioPage() {
   ];
 
   return (
-    <div className="space-y-3">
-      {/* Calendario completo - Ancho completo */}
-      <div className="w-full">
+    <div className="space-y-6 p-6">
+      {/* Calendario completo con card mejorada */}
+      <Card className="shadow-sm border-gray-200 dark:border-gray-700 overflow-hidden">
         <FullCalendarWidget ref={fullCalendarRef} onEventUpdate={fetchEvents} />
-      </div>
+      </Card>
     </div>
   );
 }

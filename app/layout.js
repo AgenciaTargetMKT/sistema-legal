@@ -3,6 +3,7 @@ import "./globals.css";
 import "./blocknote-custom.css";
 import ToastProvider from "@/components/providers/toast-provider";
 import QueryProvider from "@/components/providers/query-provider";
+import ThemeProvider from "@/components/providers/theme-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,11 +26,13 @@ export default function RootLayout({ children }) {
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <QueryProvider>
-          <ToastProvider />
-          {children}
-          <div id="portal" />
-        </QueryProvider>
+        <ThemeProvider>
+          <QueryProvider>
+            <ToastProvider />
+            {children}
+            <div id="portal" />
+          </QueryProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

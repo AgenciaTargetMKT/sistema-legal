@@ -93,11 +93,13 @@ export function TodayEventsWidget() {
   };
 
   return (
-    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+    <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">HOY</h3>
-          <p className="text-xs text-gray-500 mt-1 capitalize">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            HOY
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 capitalize">
             {formattedDate}
           </p>
         </div>
@@ -113,14 +115,18 @@ export function TodayEventsWidget() {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
-            <p className="text-gray-500 text-sm">Cargando eventos...</p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">
+              Cargando eventos...
+            </p>
           </div>
         ) : todayEvents.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
-            <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
-              <Calendar className="h-6 w-6 text-gray-400" />
+            <div className="h-12 w-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
+              <Calendar className="h-6 w-6 text-gray-400 dark:text-gray-500" />
             </div>
-            <p className="text-gray-500 text-sm">No hay eventos para hoy</p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">
+              No hay eventos para hoy
+            </p>
           </div>
         ) : (
           todayEvents.map((event) => (

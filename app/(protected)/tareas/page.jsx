@@ -278,15 +278,15 @@ export default function TareasPage() {
   return (
     <div className="min-h-full">
       {/* Contenedor con bordes redondeados */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
         {/* Header con tabs */}
-        <div className="border-b border-gray-100 rounded-t-xl">
+        <div className="border-b border-gray-100 dark:border-gray-800 rounded-t-xl">
           <div className="px-4 sm:px-6 py-3 sm:py-4">
             {/* Tabs y botón nueva tarea */}
             <div className="flex items-center gap-3">
               {/* Contenedor de tabs con scroll horizontal */}
               <div className="flex-1 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
-                <div className="flex items-center gap-1 bg-gray-200/90 p-1 rounded-xl w-max min-w-full sm:min-w-0">
+                <div className="flex items-center gap-1 bg-gray-200/90 dark:bg-gray-800 p-1 rounded-xl w-max min-w-full sm:min-w-0">
                   {tabs.map((tab) => {
                     const Icon = tab.icon;
                     const isActive = vistaActual === tab.id;
@@ -298,8 +298,8 @@ export default function TareasPage() {
                         flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap
                         ${
                           isActive
-                            ? "bg-white text-primary-600 shadow-sm"
-                            : "text-gray-600 hover:text-gray-900 hover:bg-white/50"
+                            ? "bg-white dark:bg-gray-700 text-primary-600 dark:text-primary-400 shadow-sm"
+                            : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-white/50 dark:hover:bg-gray-700/50"
                         }
                       `}
                       >
@@ -333,25 +333,25 @@ export default function TareasPage() {
 
         {/* Barra de filtros */}
         {mostrarFiltros && (
-          <div className="bg-white border-b border-gray-100 px-6 py-3">
+          <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-6 py-3">
             <div className="flex items-center gap-4">
               {/* Búsqueda */}
               <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
                 <input
                   type="text"
                   placeholder="Buscar tareas..."
-                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border-0 rounded-xl text-sm placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-primary-500/20 transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:bg-white dark:focus:bg-gray-700 focus:ring-2 focus:ring-primary-500/20 transition-all"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
 
-              <div className="h-6 w-px bg-gray-200" />
+              <div className="h-6 w-px bg-gray-200 dark:bg-gray-700" />
 
               {/* Filtros como pills */}
               <div className="flex items-center gap-2">
-                <ListFilter className="h-4 w-4 text-gray-400" />
+                <ListFilter className="h-4 w-4 text-gray-400 dark:text-gray-500" />
 
                 <Popover open={openEstado} onOpenChange={setOpenEstado}>
                   <PopoverTrigger asChild>
@@ -359,7 +359,7 @@ export default function TareasPage() {
                       variant="outline"
                       role="combobox"
                       aria-expanded={openEstado}
-                      className="justify-between h-9 border-0 bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium rounded-lg px-3 py-2 text-sm transition-all"
+                      className="justify-between h-9 border-0 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium rounded-lg px-3 py-2 text-sm transition-all"
                     >
                       <span>
                         {filtroEstado !== "todos"
@@ -527,7 +527,7 @@ export default function TareasPage() {
                 </Popover>
 
                 <select
-                  className="px-3 py-2 bg-gray-50 border-0 rounded-lg text-sm text-gray-700 font-medium focus:ring-2 focus:ring-primary-500/20 cursor-pointer hover:bg-gray-100 transition-all"
+                  className="px-3 py-2 bg-gray-50 dark:bg-gray-800 border-0 rounded-lg text-sm text-gray-700 dark:text-gray-300 font-medium focus:ring-2 focus:ring-primary-500/20 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
                   value={filtroImportancia}
                   onChange={(e) => setFiltroImportancia(e.target.value)}
                 >
@@ -537,7 +537,7 @@ export default function TareasPage() {
                 </select>
 
                 <select
-                  className="px-3 py-2 bg-gray-50 border-0 rounded-lg text-sm text-gray-700 font-medium focus:ring-2 focus:ring-primary-500/20 cursor-pointer hover:bg-gray-100 transition-all"
+                  className="px-3 py-2 bg-gray-50 dark:bg-gray-800 border-0 rounded-lg text-sm text-gray-700 dark:text-gray-300 font-medium focus:ring-2 focus:ring-primary-500/20 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
                   value={filtroUrgencia}
                   onChange={(e) => setFiltroUrgencia(e.target.value)}
                 >
@@ -548,7 +548,7 @@ export default function TareasPage() {
               </div>
 
               <div className="ml-auto">
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-gray-500 dark:text-gray-400">
                   {tareasFiltradas.length}{" "}
                   {tareasFiltradas.length === 1 ? "tarea" : "tareas"}
                 </span>
@@ -708,11 +708,11 @@ export default function TareasPage() {
                       return (
                         <div
                           key={emp.id}
-                          className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow relative z-0"
+                          className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm hover:shadow-md transition-shadow relative z-0"
                         >
                           <button
                             onClick={() => toggleEmpleado(emp.id)}
-                            className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
+                            className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                           >
                             <div className="flex items-center gap-4">
                               <motion.div
@@ -728,10 +728,10 @@ export default function TareasPage() {
                                 </span>
                               </div>
                               <div className="text-left">
-                                <h3 className="font-semibold text-gray-900">
+                                <h3 className="font-semibold text-gray-900 dark:text-gray-100">
                                   {emp.nombre} {emp.apellido}
                                 </h3>
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
                                   {tareasEmpleado.length}{" "}
                                   {tareasEmpleado.length === 1
                                     ? "tarea"

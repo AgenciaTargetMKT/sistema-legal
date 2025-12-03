@@ -4,13 +4,15 @@ import { memo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Menu, Bell, Search, Calendar } from "lucide-react";
+import { Menu, Bell, Search, Calendar, Moon, Sun } from "lucide-react";
 import { CalendarPopover } from "../features/calendario/calendar-popover";
 import { motion, AnimatePresence } from "framer-motion";
+import { useTheme } from "@/components/providers/theme-provider";
 
 const HeaderComponent = ({ onMenuClick, empleado }) => {
   const pathname = usePathname();
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   const displayName = empleado
     ? `${empleado.nombre} ${empleado.apellido}`
@@ -55,6 +57,10 @@ const HeaderComponent = ({ onMenuClick, empleado }) => {
       title: "Empleados",
       description: "Gestiona el equipo de trabajo",
     },
+    "/catalogos": {
+      title: "Catálogos",
+      description: "Administra los catálogos del sistema",
+    },
   };
 
   const currentPage = pageInfo[pathname] || {
@@ -73,7 +79,7 @@ const HeaderComponent = ({ onMenuClick, empleado }) => {
         initial={{ scale: 0.95 }}
         animate={{ scale: 1 }}
         transition={{ duration: 0.3, delay: 0.1 }}
-        className="flex h-16 items-center gap-4 rounded-2xl bg-white shadow-sm border border-gray-200 px-4 md:px-6"
+        className="flex h-16 items-center gap-4 rounded-2xl bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-700 px-4 md:px-6"
       >
         {/* Botón menú móvil - PRIMERO A LA IZQUIERDA */}
         <motion.div
@@ -98,11 +104,11 @@ const HeaderComponent = ({ onMenuClick, empleado }) => {
           transition={{ duration: 0.4, delay: 0.2 }}
           className="flex-1 flex flex-col"
         >
-          <h1 className="text-lg md:text-xl font-bold text-gray-900 truncate">
+          <h1 className="text-lg md:text-xl font-bold text-gray-900 dark:text-gray-100 truncate">
             {currentPage.title}
           </h1>
           {currentPage.description && (
-            <p className="text-xs md:text-sm text-gray-500 truncate hidden md:block">
+            <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 truncate hidden md:block">
               {currentPage.description}
             </p>
           )}
@@ -149,7 +155,7 @@ const HeaderComponent = ({ onMenuClick, empleado }) => {
           animate={{ x: 0, opacity: 1 }}
           transition={{ duration: 0.4, delay: 0.35 }}
           whileHover={{ scale: 1.02 }}
-          className="hidden md:flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-xl relative"
+          className="hidden md:flex items-center gap-3 px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl relative"
         >
           <div className="flex items-center gap-2">
             <div className="text-center">
@@ -157,17 +163,17 @@ const HeaderComponent = ({ onMenuClick, empleado }) => {
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ duration: 0.3, delay: 0.4, type: "spring" }}
-                className="text-2xl font-bold text-gray-900"
+                className="text-2xl font-bold text-gray-900 dark:text-gray-100"
               >
                 {dayOfMonth}
               </motion.div>
             </div>
-            <div className="text-left border-l pl-2 border-gray-300">
+            <div className="text-left border-l pl-2 border-gray-300 dark:border-gray-600">
               <motion.div
                 initial={{ x: -10, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ duration: 0.3, delay: 0.45 }}
-                className="text-xs text-gray-600 capitalize"
+                className="text-xs text-gray-600 dark:text-gray-300 capitalize"
               >
                 {dayOfWeek}.
               </motion.div>
@@ -175,7 +181,7 @@ const HeaderComponent = ({ onMenuClick, empleado }) => {
                 initial={{ x: -10, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ duration: 0.3, delay: 0.5 }}
-                className="text-xs text-gray-600 capitalize"
+                className="text-xs text-gray-600 dark:text-gray-300 capitalize"
               >
                 {month}
               </motion.div>
@@ -188,17 +194,58 @@ const HeaderComponent = ({ onMenuClick, empleado }) => {
               className="rounded-lg"
               onClick={() => setIsCalendarOpen(!isCalendarOpen)}
             >
-              <Calendar className="h-5 w-5 text-gray-600" />
+              <Calendar className="h-5 w-5 text-gray-600 dark:text-gray-300" />
             </Button>
           </motion.div>
         </motion.div>
+
+        {/* Botón de cambio de tema */}
+        <motion.div
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.3, delay: 0.4 }}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleTheme}
+            className="rounded-lg"
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {theme === "light" ? (
+                <motion.div
+                  key="moon"
+                  initial={{ rotate: -90, opacity: 0 }}
+                  animate={{ rotate: 0, opacity: 1 }}
+                  exit={{ rotate: 90, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Moon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="sun"
+                  initial={{ rotate: 90, opacity: 0 }}
+                  animate={{ rotate: 0, opacity: 1 }}
+                  exit={{ rotate: -90, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Sun className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </Button>
+        </motion.div>
+
         {/* Avatar del usuario */}
         <motion.div
           initial={{ x: 20, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           transition={{ duration: 0.4, delay: 0.4 }}
           whileHover={{ y: -2 }}
-          className="hidden sm:flex items-center gap-3 pl-3 border-l border-gray-200"
+          className="hidden sm:flex items-center gap-3 pl-3 border-l border-gray-200 dark:border-gray-700"
         >
           <motion.div
             initial={{ scale: 0 }}
@@ -220,8 +267,10 @@ const HeaderComponent = ({ onMenuClick, empleado }) => {
             transition={{ duration: 0.3, delay: 0.55 }}
             className="text-left"
           >
-            <p className="text-sm font-semibold text-gray-900">{displayName}</p>
-            <p className="text-xs text-gray-500">
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              {displayName}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               {empleado?.rol?.nombre || "Usuario"}
             </p>
           </motion.div>

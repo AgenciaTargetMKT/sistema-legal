@@ -95,7 +95,6 @@ export default function TareasTable({
                 .single();
 
               if (tareaActualizada) {
-               
                 setTareas((prev) => {
                   const index = prev.findIndex((t) => t.id === tareaId);
                   if (index === -1) return prev;
@@ -139,7 +138,6 @@ export default function TareasTable({
                 .single();
 
               if (tareaActualizada) {
-               
                 setTareas((prev) => {
                   const index = prev.findIndex((t) => t.id === tareaId);
                   if (index === -1) return prev;
@@ -195,8 +193,6 @@ export default function TareasTable({
               .single();
 
             if (tareaActualizada) {
-              
-
               setTareas((prev) => {
                 const index = prev.findIndex(
                   (t) => t.id === tareaActualizada.id
@@ -690,16 +686,16 @@ export default function TareasTable({
       )}
 
       {/* Tabla */}
-      <div className="w-full overflow-auto bg-white rounded-lg shadow-sm border border-gray-200">
+      <div className="w-full overflow-auto bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
         >
           <table className="w-full border-collapse">
-            <thead className="bg-linear-to-r from-slate-50 via-blue-50 to-indigo-50 sticky top-0 z-10 border-b-2 border-gray-200">
+            <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10 border-b-2 border-gray-200 dark:border-gray-700">
               <tr>
-                <th className="px-2 py-2.5 text-center text-xs font-bold text-gray-700 w-8">
+                <th className="px-2 py-2.5 text-center text-xs font-bold text-gray-700 dark:text-gray-300 w-8">
                   <input
                     type="checkbox"
                     checked={
@@ -715,8 +711,8 @@ export default function TareasTable({
                     className="cursor-pointer w-4 h-4"
                   />
                 </th>
-                <th className="px-2 py-2.5 text-center text-xs font-bold text-gray-700 w-8">
-                  <GripVertical className="w-4 h-4 mx-auto text-gray-400" />
+                <th className="px-2 py-2.5 text-center text-xs font-bold text-gray-700 dark:text-gray-300 w-8">
+                  <GripVertical className="w-4 h-4 mx-auto text-gray-400 dark:text-gray-500" />
                 </th>
                 <ColumnHeader
                   label="Nombre"
@@ -724,7 +720,7 @@ export default function TareasTable({
                   onSort={handleSort}
                   currentSort={sortConfig}
                 />
-                <th className="px-3 py-2.5 text-left text-xs font-bold text-gray-700 border-r border-gray-200 w-32">
+                <th className="px-3 py-2.5 text-left text-xs font-bold text-gray-700 dark:text-gray-100 border-r border-gray-200 dark:border-gray-700 w-32">
                   <div className="flex items-center gap-2">
                     <span>Estado</span>
                   </div>
@@ -786,7 +782,7 @@ export default function TareasTable({
                 <td colSpan="9" className="px-3 py-2.5">
                   <button
                     onClick={crearNuevaTarea}
-                    className="w-full text-left text-sm text-gray-400 hover:text-primary-600 transition-colors flex items-center gap-2 py-1"
+                    className="w-full text-left text-sm text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400 transition-colors flex items-center gap-2 py-1"
                   >
                     <span className="text-base">+</span>
                     <span>Agregar tarea</span>
@@ -800,22 +796,24 @@ export default function TareasTable({
 
       {/* Paginación inferior - Compacta */}
       {!hideControls && tareas.length > 0 && (
-        <div className="flex items-center justify-between px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
           {/* Selector e info */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-600">Mostrar</span>
+            <span className="text-xs text-gray-600 dark:text-gray-400">
+              Mostrar
+            </span>
             <select
               value={elementosPorPagina}
               onChange={(e) =>
                 cambiarElementosPorPagina(Number(e.target.value))
               }
-              className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:ring-1 focus:ring-primary-400 focus:border-primary-400 outline-none bg-white hover:border-gray-400 transition-colors"
+              className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md focus:ring-1 focus:ring-primary-400 focus:border-primary-400 outline-none bg-white dark:bg-gray-800 dark:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
             >
               <option value={20}>20</option>
               <option value={50}>50</option>
               <option value={100}>100</option>
             </select>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
               {indexPrimero + 1}-{Math.min(indexUltimo, tareas.length)} de{" "}
               {tareas.length}
             </span>
@@ -849,7 +847,7 @@ export default function TareasTable({
               </svg>
             </button>
 
-            <span className="px-3 py-1 text-xs font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-md">
+            <span className="px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
               {paginaActual} / {totalPaginas}
             </span>
 
@@ -919,8 +917,8 @@ function SortableRow({
       ref={setNodeRef}
       style={style}
       className={clsx(
-        "border-b border-gray-100 hover:bg-blue-50/30 group transition-colors",
-        estaFinalizada && "bg-green-50/50 opacity-70"
+        "border-b border-gray-100 dark:border-gray-700 hover:bg-blue-50/30 dark:hover:bg-gray-800/50 group transition-colors",
+        estaFinalizada && "bg-green-50/50 dark:bg-green-900/20 opacity-70"
       )}
     >
       <td className="px-1 py-1.5 text-center border-r">
@@ -942,8 +940,8 @@ function SortableRow({
           className={clsx(
             "flex items-center justify-center",
             estaFinalizada
-              ? "cursor-not-allowed text-gray-300"
-              : "cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
+              ? "cursor-not-allowed text-gray-300 dark:text-gray-600"
+              : "cursor-grab active:cursor-grabbing text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
           )}
         >
           <GripVertical className="w-4 h-4" />
@@ -958,7 +956,7 @@ function SortableRow({
         iconButton={
           <button
             onClick={() => onTareaClick?.(tarea)}
-            className="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-primary-600  rounded-md transition-all opacity-0 group-hover:opacity-100"
+            className="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-primary-600 dark:text-primary-400 rounded-md transition-all opacity-0 group-hover:opacity-100"
             title="Abrir panel de detalles"
           >
             <PanelRightOpen className="h-3.5 w-3.5" />
@@ -1072,7 +1070,7 @@ function TextCell({
             onChange={(e) => setCurrentValue(e.target.value)}
             onBlur={handleSave}
             onKeyDown={handleKeyDown}
-            className="flex-1 px-2 py-0.5 text-xs border-2 border-primary-400 rounded bg-primary-50 outline-none"
+            className="flex-1 px-2 py-0.5 text-xs border-2 border-primary-400 rounded bg-primary-50 dark:bg-primary-900/20 outline-none text-gray-900 dark:text-gray-100"
           />
         ) : (
           <div
@@ -1080,13 +1078,15 @@ function TextCell({
             className={clsx(
               "flex-1 px-2 py-0.5 text-xs rounded transition-colors min-h-6 flex items-center",
               disabled
-                ? "cursor-not-allowed text-gray-500"
-                : "hover:bg-gray-100 cursor-text",
-              bold && "font-semibold text-gray-900"
+                ? "cursor-not-allowed text-gray-500 dark:text-gray-400"
+                : "hover:bg-gray-100 dark:hover:bg-gray-800 cursor-text",
+              bold && "font-semibold text-gray-900 dark:text-gray-100"
             )}
           >
             {currentValue || (
-              <span className="text-gray-400 font-normal">Vacío</span>
+              <span className="text-gray-400 dark:text-gray-500 font-normal">
+                Vacío
+              </span>
             )}
           </div>
         )}
@@ -1189,7 +1189,7 @@ function EstadoCell({
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-9999 bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-36 max-w-48  overflow-y-auto"
+            className="z-9999 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl rounded-xl py-1 min-w-36 max-w-48  overflow-y-auto"
           >
             {categorias.map((categoria) => {
               const estadosCategoria = estadosAgrupados[categoria.key];
@@ -1197,7 +1197,7 @@ function EstadoCell({
 
               return (
                 <div key={categoria.key} className="mb-0.5 last:mb-0">
-                  <div className="px-2 py-0.5 text-[9px] font-semibold text-gray-400 uppercase tracking-wider">
+                  <div className="px-2 py-0.5 text-[9px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                     {categoria.label}
                   </div>
                   {estadosCategoria.map((estado) => (
@@ -1207,7 +1207,7 @@ function EstadoCell({
                         onChange(estado.id);
                         setIsOpen(false);
                       }}
-                      className="w-full px-2 py-0.5 text-left hover:bg-gray-50 transition-colors"
+                      className="w-full px-2 py-0.5 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
                       <span
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
@@ -1294,7 +1294,9 @@ function BadgeCell({ value, options, onChange, className, disabled = false }) {
             {opcionActual.nombre}
           </span>
         ) : (
-          <span className="text-xs text-gray-400 px-2 py-1">Seleccionar</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500 px-2 py-1">
+            Seleccionar
+          </span>
         )}
       </div>
 
@@ -1305,7 +1307,7 @@ function BadgeCell({ value, options, onChange, className, disabled = false }) {
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-9999 bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-[180px]"
+            className="z-9999 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl rounded-xl py-1 min-w-[180px]"
           >
             {options.map((option) => (
               <button
@@ -1314,7 +1316,7 @@ function BadgeCell({ value, options, onChange, className, disabled = false }) {
                   onChange(option.id);
                   setIsOpen(false);
                 }}
-                className="w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors"
+                className="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 <span
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
@@ -1384,7 +1386,7 @@ function DateCell({ value, onChange, disabled = false }) {
             }
           }}
           autoFocus
-          className="w-full px-2 py-0.5 text-xs border rounded bg-primary-50 ring-2 ring-primary-400 outline-none"
+          className="w-full px-2 py-0.5 text-xs border rounded bg-primary-50 dark:bg-primary-900/20 ring-2 ring-primary-400 outline-none text-gray-900 dark:text-gray-100"
         />
       ) : (
         <div
@@ -1392,8 +1394,8 @@ function DateCell({ value, onChange, disabled = false }) {
           className={clsx(
             "min-h-6 px-2 py-0.5 rounded transition-all flex items-center text-xs",
             disabled
-              ? "cursor-not-allowed text-gray-500"
-              : "hover:bg-gray-100 cursor-pointer"
+              ? "cursor-not-allowed text-gray-500 dark:text-gray-400"
+              : "hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-gray-900 dark:text-gray-100"
           )}
         >
           {value ? formatearFecha(value) : "Sin fecha"}
@@ -1449,14 +1451,18 @@ function SelectCell({
         className={clsx(
           "min-h-6 px-2 py-0.5 rounded transition-all flex items-center text-xs truncate",
           disabled
-            ? "cursor-not-allowed opacity-60 bg-gray-50"
-            : "hover:bg-gray-100 cursor-pointer"
+            ? "cursor-not-allowed opacity-60 bg-gray-50 dark:bg-gray-800"
+            : "hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
         )}
       >
         {opcionSeleccionada ? (
-          <span className="text-gray-900">{opcionSeleccionada.nombre}</span>
+          <span className="text-gray-900 dark:text-gray-100">
+            {opcionSeleccionada.nombre}
+          </span>
         ) : (
-          <span className="text-gray-400">{placeholder}</span>
+          <span className="text-gray-400 dark:text-gray-500">
+            {placeholder}
+          </span>
         )}
       </div>
 
@@ -1467,7 +1473,7 @@ function SelectCell({
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-9999 bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-[200px] max-h-[300px] overflow-y-auto"
+            className="z-9999 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl rounded-xl py-1 min-w-[200px] max-h-[300px] overflow-y-auto"
           >
             {options.map((option) => (
               <button
@@ -1555,13 +1561,15 @@ function EmpleadosDisplay({ empleados, onTareaClick, disabled }) {
             );
           })
         ) : (
-          <span className="text-xs text-gray-400">Sin responsables</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500">
+            Sin responsables
+          </span>
         )}
 
         {/* Botón para abrir panel (visible en hover) */}
         <button
           onClick={() => onTareaClick?.()}
-          className="ml-1 text-gray-300 hover:text-primary-600 transition-colors opacity-0 group-hover:opacity-100"
+          className="ml-1 text-gray-300 dark:text-gray-600 hover:text-primary-600 dark:hover:text-primary-400 transition-colors opacity-0 group-hover:opacity-100"
           title="Editar responsables"
         >
           <PanelRightOpen className="h-3.5 w-3.5" />

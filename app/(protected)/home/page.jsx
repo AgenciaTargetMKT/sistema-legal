@@ -158,59 +158,75 @@ export default function DashboardPage() {
       {/* Tarjetas de Estadísticas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Procesos */}
-        <div className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow border border-gray-200">
+        <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow border border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between mb-3">
-            <div className="h-12 w-12 rounded-lg bg-blue-50 flex items-center justify-center">
-              <Scale className="h-6 w-6 text-blue-600" />
+            <div className="h-12 w-12 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
+              <Scale className="h-6 w-6 text-blue-600 dark:text-blue-400" />
             </div>
-            <span className="text-3xl font-bold text-gray-900">
+            <span className="text-3xl font-bold text-gray-900 dark:text-gray-100">
               {stats.totalProcesos}
             </span>
           </div>
-          <p className="text-sm text-gray-600 font-medium">Total Procesos</p>
-          <p className="text-xs text-gray-400 mt-1">En el sistema</p>
+          <p className="text-sm text-gray-600 dark:text-gray-300 font-medium">
+            Total Procesos
+          </p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+            En el sistema
+          </p>
         </div>
 
         {/* Procesos Activos */}
-        <div className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow border border-gray-200">
+        <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow border border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between mb-3">
-            <div className="h-12 w-12 rounded-lg bg-green-50 flex items-center justify-center">
-              <CheckCircle2 className="h-6 w-6 text-green-600" />
+            <div className="h-12 w-12 rounded-lg bg-green-50 dark:bg-green-900/30 flex items-center justify-center">
+              <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
             </div>
-            <span className="text-3xl font-bold text-gray-900">
+            <span className="text-3xl font-bold text-gray-900 dark:text-gray-100">
               {stats.procesosActivos}
             </span>
           </div>
-          <p className="text-sm text-gray-600 font-medium">Procesos Activos</p>
-          <p className="text-xs text-gray-400 mt-1">En progreso</p>
+          <p className="text-sm text-gray-600 dark:text-gray-300 font-medium">
+            Procesos Activos
+          </p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+            En progreso
+          </p>
         </div>
 
         {/* Tareas Vencidas */}
-        <div className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow border border-gray-200">
+        <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow border border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between mb-3">
-            <div className="h-12 w-12 rounded-lg bg-orange-50 flex items-center justify-center">
-              <AlertTriangle className="h-6 w-6 text-orange-600" />
+            <div className="h-12 w-12 rounded-lg bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center">
+              <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400" />
             </div>
-            <span className="text-3xl font-bold text-gray-900">
+            <span className="text-3xl font-bold text-gray-900 dark:text-gray-100">
               {stats.tareasVencidas}
             </span>
           </div>
-          <p className="text-sm text-gray-600 font-medium">Tareas Vencidas</p>
-          <p className="text-xs text-gray-400 mt-1">Requieren atención</p>
+          <p className="text-sm text-gray-600 dark:text-gray-300 font-medium">
+            Tareas Vencidas
+          </p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+            Requieren atención
+          </p>
         </div>
 
         {/* Impulsos Hoy */}
-        <div className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow border border-gray-200">
+        <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow border border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between mb-3">
-            <div className="h-12 w-12 rounded-lg bg-purple-50 flex items-center justify-center">
-              <TrendingUp className="h-6 w-6 text-purple-600" />
+            <div className="h-12 w-12 rounded-lg bg-purple-50 dark:bg-purple-900/30 flex items-center justify-center">
+              <TrendingUp className="h-6 w-6 text-purple-600 dark:text-purple-400" />
             </div>
-            <span className="text-3xl font-bold text-gray-900">
+            <span className="text-3xl font-bold text-gray-900 dark:text-gray-100">
               {stats.impulsosHoy}
             </span>
           </div>
-          <p className="text-sm text-gray-600 font-medium">Impulsos Hoy</p>
-          <p className="text-xs text-gray-400 mt-1">Programados</p>
+          <p className="text-sm text-gray-600 dark:text-gray-300 font-medium">
+            Impulsos Hoy
+          </p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+            Programados
+          </p>
         </div>
       </div>
       {/* Grid: Eventos de Hoy + Impulsos */}
@@ -218,9 +234,9 @@ export default function DashboardPage() {
         {/* Eventos de Hoy */}
         <TodayEventsWidget />
         {/* Impulsos próximos - 2 columnas */}
-        <div className="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+        <div className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Próximos Impulsos
             </h2>
             <Link

@@ -99,3 +99,117 @@
     min-height: 300px;
   }
 }
+
+/* ===== MODO OSCURO ===== */
+.dark .blocknote-editor-wrapper {
+  background: #1f2937;
+}
+
+/* Editor y contenedor en modo oscuro */
+.dark .blocknote-editor-wrapper .bn-editor,
+.dark .blocknote-editor-wrapper .bn-container {
+  background: #1f2937 !important;
+  color: #f3f4f6 !important;
+}
+
+/* Texto de los bloques en modo oscuro */
+.dark .blocknote-editor-wrapper .bn-block-content {
+  color: #f3f4f6 !important;
+}
+
+/* Toolbar en modo oscuro */
+.dark .blocknote-editor-wrapper .bn-toolbar {
+  background: #374151 !important;
+  border-color: #4b5563 !important;
+}
+
+/* Menús y dropdowns en modo oscuro */
+.dark .blocknote-editor-wrapper .bn-menu,
+.dark .blocknote-editor-wrapper [role="menu"] {
+  background: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #f3f4f6 !important;
+}
+
+/* Items de menú en modo oscuro */
+.dark .blocknote-editor-wrapper .bn-menu-item,
+.dark .blocknote-editor-wrapper [role="menuitem"] {
+  color: #f3f4f6 !important;
+}
+
+.dark .blocknote-editor-wrapper .bn-menu-item:hover,
+.dark .blocknote-editor-wrapper [role="menuitem"]:hover {
+  background: #4b5563 !important;
+}
+
+/* Placeholder en modo oscuro */
+.dark .blocknote-editor-wrapper .bn-block-content[data-placeholder]::before {
+  color: #6b7280 !important;
+}
+
+/* Enlaces en modo oscuro */
+.dark .blocknote-editor-wrapper a {
+  color: #60a5fa !important;
+}
+
+.dark .blocknote-editor-wrapper a:hover {
+  color: #93c5fd !important;
+}
+
+/* Citas en modo oscuro */
+.dark .blocknote-editor-wrapper blockquote {
+  border-left-color: #3b82f6 !important;
+  color: #9ca3af !important;
+}
+
+/* Bloques de código en modo oscuro */
+.dark .blocknote-editor-wrapper pre {
+  background: #111827 !important;
+  color: #e5e7eb !important;
+}
+
+/* Separadores en modo oscuro */
+.dark .blocknote-editor-wrapper hr {
+  border-color: #4b5563 !important;
+}
+
+/* Drag handle en modo oscuro */
+.dark .blocknote-editor-wrapper .bn-drag-handle {
+  color: #9ca3af !important;
+}
+
+/* Botones en modo oscuro */
+.dark .blocknote-editor-wrapper button {
+  color: #f3f4f6 !important;
+}
+
+.dark .blocknote-editor-wrapper button:hover {
+  background: #4b5563 !important;
+}
+
+/* Inputs en modo oscuro */
+.dark .blocknote-editor-wrapper input {
+  background: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #f3f4f6 !important;
+}
+
+/* Side menu en modo oscuro */
+.dark .blocknote-editor-wrapper .bn-side-menu {
+  background: #374151 !important;
+}
+
+/* Tablas en modo oscuro */
+.dark .blocknote-editor-wrapper table {
+  border-color: #4b5563 !important;
+}
+
+.dark .blocknote-editor-wrapper th,
+.dark .blocknote-editor-wrapper td {
+  border-color: #4b5563 !important;
+  color: #f3f4f6 !important;
+}
+
+.dark .blocknote-editor-wrapper th {
+  background: #374151 !important;
+}

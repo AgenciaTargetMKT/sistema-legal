@@ -627,10 +627,10 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed right-0 top-0 h-full w-[1200px] bg-white shadow-2xl z-9999 overflow-y-auto"
+            className="fixed right-0 top-0 h-full w-[1200px] bg-white dark:bg-gray-900 shadow-2xl z-9999 overflow-y-auto"
           >
             {/* Header */}
-            <div className="sticky top-0 bg-white border-b px-8 py-5 flex items-center justify-between z-10000">
+            <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-8 py-5 flex items-center justify-between z-10000">
               <div className="flex-1">
                 {!proceso?.id ? (
                   <input
@@ -638,11 +638,11 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                     value={procesoLocal?.nombre || ""}
                     onChange={(e) => actualizarCampo("nombre", e.target.value)}
                     placeholder="Nombre del proceso..."
-                    className="text-2xl font-semibold text-gray-900 bg-transparent border-b-2 border-primary-400 outline-none w-full focus:border-primary-600"
+                    className="text-2xl font-semibold text-gray-900 dark:text-gray-100 bg-transparent border-b-2 border-primary-400 outline-none w-full focus:border-primary-600"
                     autoFocus
                   />
                 ) : (
-                  <h2 className="text-2xl font-semibold text-gray-900">
+                  <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
                     {procesoLocal?.nombre || "Proceso sin nombre"}
                   </h2>
                 )}
@@ -893,10 +893,10 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                       {procesosEmpleados.map((pe) => (
                         <div
                           key={pe.id}
-                          className="bg-gray-50 rounded-lg p-4 flex items-center justify-between hover:bg-gray-100 transition-colors group"
+                          className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group"
                         >
                           <div>
-                            <p className="text-sm font-medium text-gray-900">
+                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                               {pe.empleado?.nombre} {pe.empleado?.apellido}
                             </p>
                             {pe.rol && (
@@ -943,8 +943,8 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                         </div>
                       ))}
                       {procesosEmpleados.length === 0 && (
-                        <div className="bg-gray-50 rounded-lg p-8 text-center">
-                          <p className="text-sm text-gray-400">
+                        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-8 text-center">
+                          <p className="text-sm text-gray-400 dark:text-gray-500">
                             No hay empleados asignados
                           </p>
                         </div>
@@ -998,7 +998,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                               initial={{ opacity: 0, y: -10 }}
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0, x: -20 }}
-                              className="bg-gray-50 rounded-lg p-3 hover:bg-gray-100 transition-colors cursor-pointer border border-transparent hover:border-primary-200"
+                              className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer border border-transparent hover:border-primary-200 dark:hover:border-primary-700"
                               onClick={() => {
                                 setTareaSeleccionada(tarea);
                                 setTareaPanelOpen(true);
@@ -1015,8 +1015,8 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                                     className={clsx(
                                       "text-sm font-medium",
                                       tarea.estado?.nombre === "completada"
-                                        ? "text-gray-400 line-through"
-                                        : "text-gray-900"
+                                        ? "text-gray-400 dark:text-gray-500 line-through"
+                                        : "text-gray-900 dark:text-gray-100"
                                     )}
                                   >
                                     {tarea.nombre}
@@ -1097,7 +1097,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                             value={nuevoComentario}
                             onChange={(e) => setNuevoComentario(e.target.value)}
                             placeholder="Agregar un comentario..."
-                            className="h-12 pr-4 pl-4 rounded-xl border-2 border-gray-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all"
+                            className="h-12 pr-4 pl-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 focus:border-primary-400 dark:focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:focus:ring-primary-900 transition-all bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && !e.shiftKey) {
                                 e.preventDefault();
@@ -1128,11 +1128,11 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                     {/* Tabla de comentarios - Scroll independiente */}
                     <div className="flex-1 overflow-y-auto max-h-[calc(100vh-300px)]">
                       {comentarios.length > 0 ? (
-                        <div className="overflow-x-auto rounded-lg border border-gray-200">
-                          <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50 sticky top-0">
+                        <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
                               <tr>
-                                <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[90px]">
+                                <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[90px]">
                                   Fecha
                                 </th>
                                 <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[120px]">
@@ -1143,13 +1143,13 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                                 </th>
                               </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-100">
+                            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
                               {comentarios.map((comentario) => (
                                 <tr
                                   key={comentario.id}
                                   className="hover:bg-blue-50/50 transition-colors"
                                 >
-                                  <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap align-top">
+                                  <td className="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap align-top">
                                     <div className="flex flex-col leading-tight">
                                       <span className="font-medium text-gray-600">
                                         {new Date(
@@ -1188,7 +1188,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                           </table>
                         </div>
                       ) : (
-                        <div className="bg-gray-50 rounded-lg p-12 text-center border-2 border-dashed border-gray-200">
+                        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-12 text-center border-2 border-dashed border-gray-200 dark:border-gray-700">
                           <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                           <p className="text-sm text-gray-400 font-medium">
                             No hay comentarios aún

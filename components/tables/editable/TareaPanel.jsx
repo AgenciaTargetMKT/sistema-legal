@@ -19,8 +19,11 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import BlockNoteEditor from "@/components/features/tareas/BlockNoteEditor";
+import { useTheme } from "@/components/providers/theme-provider";
 
 export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
 
@@ -1265,10 +1268,10 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: "100%", opacity: 0 }}
             transition={{ type: "tween", duration: 0.2, ease: "easeOut" }}
-            className="fixed right-0 top-0 h-full w-[900px] bg-white shadow-2xl z-9999 overflow-y-auto"
+            className="fixed right-0 top-0 h-full w-[900px] bg-white dark:bg-gray-900 shadow-2xl z-9999 overflow-y-auto"
           >
             {/* Header minimalista */}
-            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-9990">
+            <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between z-9990">
               <div className="flex-1 min-w-0 mr-4">
                 <div className="flex items-center gap-2">
                   {/* Selector de prefijo para sincronización con Google Calendar */}
@@ -1408,7 +1411,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                         }
                       }
                     }}
-                    className="px-3 py-1.5 text-sm font-medium border-2 border-gray-300 rounded-xl focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none transition-all bg-white hover:border-primary-400 cursor-pointer"
+                    className="px-3 py-1.5 text-sm font-medium border-2 border-gray-300 dark:border-gray-600 rounded-xl focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800 outline-none transition-all bg-white dark:bg-gray-800 hover:border-primary-400 dark:hover:border-primary-600 cursor-pointer text-gray-900 dark:text-gray-100"
                   >
                     <option value="">Sin prefijo</option>
                     <option value="VENCIMIENTO">📅 VENCIMIENTO</option>
@@ -1430,7 +1433,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                     }}
                     placeholder="Título de la tarea..."
                     className={clsx(
-                      "text-xl font-semibold text-gray-900 bg-transparent outline-none w-full rounded px-2 transition-colors",
+                      "text-xl font-semibold text-gray-900 dark:text-gray-100 bg-transparent outline-none w-full rounded px-2 transition-colors",
                       !tarea?.id
                         ? "border-b-2 border-primary-400 focus:border-primary-600"
                         : "border-b border-transparent hover:border-gray-300 focus:border-primary-400"
@@ -1482,9 +1485,9 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                 )}
                 <button
                   onClick={onClose}
-                  className="p-1.5 hover:bg-gray-100 rounded transition-colors shrink-0"
+                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors shrink-0"
                 >
-                  <X className="w-5 h-5 text-gray-500" />
+                  <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                 </button>
               </div>
             </div>
@@ -1508,10 +1511,10 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                       />
                     </svg>
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
                     Tarea Terminada
                   </h3>
-                  <p className="text-gray-900">
+                  <p className="text-gray-900 dark:text-gray-100">
                     Esta tarea ha sido completada y no puede ser editada
                   </p>
                   <button
@@ -1592,23 +1595,74 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                         fontSize: "14px",
                         borderColor: datosActuales?._fromProceso
                           ? "transparent"
+                          : isDark
+                          ? "#374151"
                           : "#e5e7eb",
                         borderRadius: "12px",
                         backgroundColor: datosActuales?._fromProceso
-                          ? "#f9fafb"
+                          ? isDark
+                            ? "#1f2937"
+                            : "#f9fafb"
+                          : isDark
+                          ? "#111827"
                           : "white",
                         cursor: datosActuales?._fromProceso
                           ? "not-allowed"
                           : "pointer",
+                        color: isDark ? "#f3f4f6" : "#111827",
+                      }),
+                      singleValue: (base) => ({
+                        ...base,
+                        color: isDark ? "#f3f4f6" : "#111827",
+                      }),
+                      input: (base) => ({
+                        ...base,
+                        color: isDark ? "#f3f4f6" : "#111827",
+                      }),
+                      placeholder: (base) => ({
+                        ...base,
+                        color: isDark ? "#9ca3af" : "#6b7280",
                       }),
                       menu: (base) => ({
                         ...base,
                         zIndex: 11002,
                         borderRadius: "12px",
+                        backgroundColor: isDark ? "#1f2937" : "white",
+                        border: isDark
+                          ? "1px solid #374151"
+                          : "1px solid #e5e7eb",
+                      }),
+                      menuList: (base) => ({
+                        ...base,
+                        padding: "4px",
+                      }),
+                      option: (base, state) => ({
+                        ...base,
+                        backgroundColor: state.isSelected
+                          ? isDark
+                            ? "#3b82f6"
+                            : "#dbeafe"
+                          : state.isFocused
+                          ? isDark
+                            ? "#374151"
+                            : "#f3f4f6"
+                          : "transparent",
+                        color: state.isSelected
+                          ? isDark
+                            ? "#ffffff"
+                            : "#1e3a8a"
+                          : isDark
+                          ? "#f3f4f6"
+                          : "#111827",
+                        cursor: "pointer",
+                        ":active": {
+                          backgroundColor: isDark ? "#3b82f6" : "#dbeafe",
+                        },
                       }),
                       noOptionsMessage: (base) => ({
                         ...base,
                         padding: 0,
+                        color: isDark ? "#f3f4f6" : "#111827",
                       }),
                     }}
                   />
@@ -1684,22 +1738,71 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                         backgroundColor:
                           datosActuales?._fromProceso ||
                           datosActuales?.proceso_id
-                            ? "#f9fafb"
+                            ? isDark
+                              ? "#1f2937"
+                              : "#f9fafb"
+                            : isDark
+                            ? "#111827"
                             : "white",
                         cursor:
                           datosActuales?._fromProceso ||
                           datosActuales?.proceso_id
                             ? "not-allowed"
                             : "pointer",
+                        color: isDark ? "#f3f4f6" : "#111827",
+                      }),
+                      singleValue: (base) => ({
+                        ...base,
+                        color: isDark ? "#f3f4f6" : "#111827",
+                      }),
+                      input: (base) => ({
+                        ...base,
+                        color: isDark ? "#f3f4f6" : "#111827",
+                      }),
+                      placeholder: (base) => ({
+                        ...base,
+                        color: isDark ? "#9ca3af" : "#6b7280",
                       }),
                       menu: (base) => ({
                         ...base,
                         zIndex: 11002,
                         borderRadius: "12px",
+                        backgroundColor: isDark ? "#1f2937" : "white",
+                        border: isDark
+                          ? "1px solid #374151"
+                          : "1px solid #e5e7eb",
+                      }),
+                      menuList: (base) => ({
+                        ...base,
+                        padding: "4px",
+                      }),
+                      option: (base, state) => ({
+                        ...base,
+                        backgroundColor: state.isSelected
+                          ? isDark
+                            ? "#3b82f6"
+                            : "#dbeafe"
+                          : state.isFocused
+                          ? isDark
+                            ? "#374151"
+                            : "#f3f4f6"
+                          : "transparent",
+                        color: state.isSelected
+                          ? isDark
+                            ? "#ffffff"
+                            : "#1e3a8a"
+                          : isDark
+                          ? "#f3f4f6"
+                          : "#111827",
+                        cursor: "pointer",
+                        ":active": {
+                          backgroundColor: isDark ? "#3b82f6" : "#dbeafe",
+                        },
                       }),
                       noOptionsMessage: (base) => ({
                         ...base,
                         padding: 0,
+                        color: isDark ? "#f3f4f6" : "#111827",
                       }),
                     }}
                   />
@@ -1721,8 +1824,8 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
               >
                 {initialLoading ? (
                   <div className="flex gap-1">
-                    <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse"></div>
-                    <div className="h-6 w-20 bg-gray-200 rounded-full animate-pulse"></div>
+                    <div className="h-6 w-16 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse"></div>
+                    <div className="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse"></div>
                   </div>
                 ) : (
                   <EmpleadosBadgeSelector
@@ -1743,8 +1846,8 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
               >
                 {initialLoading ? (
                   <div className="flex gap-1">
-                    <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse"></div>
-                    <div className="h-6 w-20 bg-gray-200 rounded-full animate-pulse"></div>
+                    <div className="h-6 w-16 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse"></div>
+                    <div className="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse"></div>
                   </div>
                 ) : soloDesignado ? (
                   <div className="flex items-center gap-2">
@@ -1843,7 +1946,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                         <div className="flex items-center justify-between">
                           <button
                             onClick={() => setEsTodoElDia(!esTodoElDia)}
-                            className="flex items-center gap-2 text-xs text-gray-700 hover:text-primary-600 transition-colors"
+                            className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
                           >
                             <div
                               className={clsx(
@@ -1880,29 +1983,29 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
 
                         {/* SIEMPRE mostrar selectores de hora */}
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-600 font-medium">
+                          <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">
                             Horario:
                           </span>
                           <input
                             type="time"
                             value={horaInicio}
                             onChange={(e) => setHoraInicio(e.target.value)}
-                            className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none"
+                            className="px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                           />
-                          <span className="text-xs text-gray-500 font-medium">
+                          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
                             a
                           </span>
                           <input
                             type="time"
                             value={horaFin}
                             onChange={(e) => setHoraFin(e.target.value)}
-                            className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none"
+                            className="px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                           />
                         </div>
                       </div>
 
                       {!debeSincronizarConCalendario(datosActuales?.nombre) && (
-                        <div className="text-[10px] text-gray-500 italic">
+                        <div className="text-[10px] text-gray-500 dark:text-gray-400 italic">
                           💡 Para sincronizar con Google Calendar, el nombre
                           debe empezar con: VENCIMIENTO, AUDIENCIA, REUNIÓN o
                           SEGUIMIENTO
@@ -1917,7 +2020,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                   icon={<Calendar className="w-3.5 h-3.5" />}
                   label="Completada"
                 >
-                  <span className="text-sm text-gray-700">
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
                     {formatearFecha(datosActuales.fecha_completada)}
                   </span>
                 </PropertyRow>
@@ -1926,7 +2029,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
               <div className="border-t my-4"></div>
               {/* Descripción */}
               <div className="space-y-2">
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                   Descripción
                 </label>
                 <EditableText
@@ -1940,15 +2043,15 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
               <div className="space-y-3 mt-6 pt-6 border-t">
                 <div className="flex items-center gap-2">
                   <BookOpen className="h-4 w-4 text-primary-600" />
-                  <label className="text-sm font-semibold text-gray-700">
+                  <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                     Notas
                   </label>
                 </div>
-                <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
                   {tarea?.id ? (
                     <BlockNoteEditor tareaId={tarea.id} readOnly={false} />
                   ) : (
-                    <div className="text-center py-8 text-gray-400">
+                    <div className="text-center py-8 text-gray-400 dark:text-gray-500">
                       <FileText className="h-10 w-10 mx-auto mb-2" />
                       <p className="text-sm">
                         Guarda la tarea primero para agregar notas
@@ -1959,7 +2062,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
               </div>
               {/* Notas simples (legacy - mantener para compatibilidad) */}
               <div className="space-y-2 mt-4 hidden">
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                   Notas Simples (Obsoleto)
                 </label>
                 <EditableText
@@ -1971,7 +2074,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
               </div>
               {/* Metadatos al final */}
               {tarea?.id && (
-                <div className="mt-6 pt-4 border-t space-y-1 text-xs text-gray-500">
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 space-y-1 text-xs text-gray-500 dark:text-gray-400">
                   <div className="flex justify-between">
                     <span>Creada</span>
                     <span>{formatearFecha(tarea.created_at)}</span>
@@ -2068,7 +2171,7 @@ function EstadoSelectGrouped({ value, estados, onUpdate }) {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute left-0 top-full mt-1 bg-white border rounded-lg shadow-xl z-9980 w-[140px] max-h-[400px] overflow-y-auto"
+            className="absolute left-0 top-full mt-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-xl z-9980 w-[140px] max-h-[400px] overflow-y-auto"
           >
             {categorias.map((categoria) => {
               const estadosCategoria = estadosAgrupados[categoria.key];
@@ -2077,7 +2180,7 @@ function EstadoSelectGrouped({ value, estados, onUpdate }) {
 
               return (
                 <div key={categoria.key} className="py-1">
-                  <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                     {categoria.label}
                   </div>
                   {estadosCategoria.map((estado) => (
@@ -2085,8 +2188,9 @@ function EstadoSelectGrouped({ value, estados, onUpdate }) {
                       key={estado.id}
                       onClick={() => handleSelect(estado.id)}
                       className={clsx(
-                        "w-full px-2 py-1.5 text-left hover:bg-gray-50 transition-colors",
-                        value === estado.id && "bg-primary-50"
+                        "w-full px-2 py-1.5 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors",
+                        value === estado.id &&
+                          "bg-primary-50 dark:bg-primary-900/30"
                       )}
                     >
                       <span
@@ -2175,15 +2279,15 @@ function BadgeSelector({ value, options, onUpdate }) {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute left-0 top-full mt-1 bg-white border rounded-lg shadow-xl z-9980 w-40 py-1"
+            className="absolute left-0 top-full mt-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-xl z-9980 w-40 py-1"
           >
             {options.map((option) => (
               <button
                 key={option.id}
                 onClick={() => handleSelect(option.id)}
                 className={clsx(
-                  "w-full px-2 py-1.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-2",
-                  value === option.id && "bg-primary-50"
+                  "w-full px-2 py-1.5 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2",
+                  value === option.id && "bg-primary-50 dark:bg-primary-900/30"
                 )}
               >
                 <span
@@ -2214,10 +2318,12 @@ function BadgeSelector({ value, options, onUpdate }) {
 // Componente PropertyRow estilo Notion
 function PropertyRow({ icon, label, children }) {
   return (
-    <div className="flex items-center py-1 hover:bg-gray-50 group">
+    <div className="flex items-center py-1 hover:bg-gray-50 dark:hover:bg-gray-800 group">
       <div className="flex items-center gap-2 w-[140px] shrink-0">
-        <span className="text-gray-400">{icon}</span>
-        <span className="text-xs text-gray-600 font-medium">{label}</span>
+        <span className="text-gray-400 dark:text-gray-500">{icon}</span>
+        <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">
+          {label}
+        </span>
       </div>
       <div className="flex-1 min-w-0">{children}</div>
     </div>
@@ -2290,7 +2396,7 @@ function EditableText({ value, onUpdate, multiline = false, placeholder }) {
             onChange={(e) => setCurrentValue(e.target.value)}
             onBlur={handleSave}
             onKeyDown={handleKeyDown}
-            className="w-full px-2 py-1 text-sm border-2 border-primary-400 rounded outline-none bg-primary-50 min-h-[100px] resize-y"
+            className="w-full px-2 py-1 text-sm border-2 border-primary-400 rounded outline-none bg-primary-50 dark:bg-primary-900/20 text-gray-900 dark:text-gray-100 min-h-[100px] resize-y"
             placeholder={placeholder}
           />
         ) : (
@@ -2301,7 +2407,7 @@ function EditableText({ value, onUpdate, multiline = false, placeholder }) {
             onChange={(e) => setCurrentValue(e.target.value)}
             onBlur={handleSave}
             onKeyDown={handleKeyDown}
-            className="w-full px-2 py-1 text-sm border-2 border-primary-400 rounded outline-none bg-primary-50"
+            className="w-full px-2 py-1 text-sm border-2 border-primary-400 rounded outline-none bg-primary-50 dark:bg-primary-900/20 text-gray-900 dark:text-gray-100"
             placeholder={placeholder}
           />
         )
@@ -2309,9 +2415,10 @@ function EditableText({ value, onUpdate, multiline = false, placeholder }) {
         <div
           onClick={handleStartEdit}
           className={clsx(
-            "w-full px-2 py-1 text-sm rounded hover:bg-gray-100 cursor-pointer transition-colors",
+            "w-full px-2 py-1 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors",
             multiline ? "min-h-[100px] whitespace-pre-wrap" : "",
-            !currentValue && "text-gray-400"
+            !currentValue && "text-gray-400 dark:text-gray-500",
+            currentValue && "text-gray-900 dark:text-gray-100"
           )}
         >
           {currentValue || placeholder || "Vacío"}
@@ -2364,14 +2471,20 @@ function EditableDate({ value, onUpdate, compact = false }) {
             }
           }}
           autoFocus
-          className="w-40 px-2 py-1 text-sm border-2 border-primary-400 rounded bg-primary-50 outline-none"
+          className="w-40 px-2 py-1 text-sm border-2 border-primary-400 rounded bg-primary-50 dark:bg-primary-900/20 text-gray-900 dark:text-gray-100 outline-none"
         />
       ) : (
         <div
           onClick={() => setEditing(true)}
-          className="w-full px-2 py-1 text-sm rounded hover:bg-gray-100 cursor-pointer transition-colors"
+          className="w-full px-2 py-1 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors"
         >
-          <span className={value ? "text-gray-900" : "text-gray-400"}>
+          <span
+            className={
+              value
+                ? "text-gray-900 dark:text-gray-100"
+                : "text-gray-400 dark:text-gray-500"
+            }
+          >
             {value ? formatearFecha(value) : "Sin fecha"}
           </span>
         </div>
@@ -2550,8 +2663,8 @@ function EmpleadosBadgeSelector({
         className={clsx(
           "flex flex-wrap gap-1.5 px-2 py-1.5 rounded-lg transition-colors min-h-8",
           disabled
-            ? "cursor-not-allowed opacity-60 bg-gray-100"
-            : "hover:bg-gray-50 cursor-pointer"
+            ? "cursor-not-allowed opacity-60 bg-gray-100 dark:bg-gray-800"
+            : "hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
         )}
       >
         {value && value.length > 0 ? (
@@ -2579,7 +2692,7 @@ function EmpleadosBadgeSelector({
                 {!disabled && (
                   <button
                     onClick={(e) => handleRemoveEmpleado(empleadoId, e)}
-                    className="ml-1 hover:bg-black hover:bg-opacity-20 rounded-full w-4 h-4 flex items-center justify-center transition-colors"
+                    className="ml-1 hover:bg-black/20 dark:hover:bg-white/20 rounded-full w-4 h-4 flex items-center justify-center transition-colors"
                     title="Eliminar"
                   >
                     ×
@@ -2589,7 +2702,9 @@ function EmpleadosBadgeSelector({
             );
           })
         ) : (
-          <span className="text-sm text-gray-400">{placeholder}</span>
+          <span className="text-sm text-gray-400 dark:text-gray-500">
+            {placeholder}
+          </span>
         )}
       </div>
 
@@ -2599,7 +2714,7 @@ function EmpleadosBadgeSelector({
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute left-0 top-full mt-1 bg-white border rounded-xl shadow-xl z-11001 min-w-40 max-h-[300px] overflow-y-auto py-1"
+            className="absolute left-0 top-full mt-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-xl z-11001 min-w-40 max-h-[300px] overflow-y-auto py-1"
           >
             {options.map((empleado, index) => {
               const isSelected = value?.some((e) => {
@@ -2616,8 +2731,8 @@ function EmpleadosBadgeSelector({
                   type="button"
                   onClick={(e) => handleToggleEmpleado(e, empleado)}
                   className={clsx(
-                    "w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-3",
-                    isSelected && "bg-primary-50"
+                    "w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-3",
+                    isSelected && "bg-primary-50 dark:bg-primary-900/30"
                   )}
                 >
                   <div
@@ -2627,11 +2742,13 @@ function EmpleadosBadgeSelector({
                       border: `2px solid ${colorObj.text}`,
                     }}
                   />
-                  <span className="flex-1">
+                  <span className="flex-1 text-gray-900 dark:text-gray-100">
                     {empleado.nombre || "Empleado"}
                   </span>
                   {isSelected && (
-                    <span className="text-blue-600 text-sm">✓</span>
+                    <span className="text-blue-600 dark:text-blue-400 text-sm">
+                      ✓
+                    </span>
                   )}
                 </button>
               );

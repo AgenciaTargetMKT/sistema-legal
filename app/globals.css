@@ -175,6 +175,53 @@ body {
   display: none;  /* Chrome, Safari and Opera */
 }
 
+/* Estilos personalizados para scrollbars - más delgados y con tema oscuro */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9; /* thumb track en modo claro */
+}
+
+.dark * {
+  scrollbar-color: #4b5563 #1f2937; /* thumb track en modo oscuro */
+}
+
+/* Webkit/Blink (Chrome, Safari, Edge) */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.dark *::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background: #4b5563;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* Animaciones personalizadas */
 @keyframes slide-in-right {
   from {

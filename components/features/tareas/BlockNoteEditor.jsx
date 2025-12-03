@@ -8,11 +8,14 @@ import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { useTheme } from "@/components/providers/theme-provider";
 import toast from "react-hot-toast";
 import { Loader2, Save, History, FileText } from "lucide-react";
 
 export default function BlockNoteEditor({ tareaId, readOnly = false }) {
   const { empleado } = useAuth();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
@@ -229,7 +232,9 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary-500 mx-auto mb-3" />
-          <p className="text-sm text-gray-500">Cargando notas...</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Cargando notas...
+          </p>
         </div>
       </div>
     );
@@ -237,12 +242,12 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
 
   if (!tareaId) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-        <FileText className="h-12 w-12 text-gray-400 mb-3" />
-        <p className="text-sm text-gray-600 font-medium">
+      <div className="flex flex-col items-center justify-center py-12 text-center bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
+        <FileText className="h-12 w-12 text-gray-400 dark:text-gray-500 mb-3" />
+        <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">
           Guarda la tarea primero
         </p>
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
           Las notas estarán disponibles después de guardar
         </p>
       </div>
@@ -252,13 +257,17 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
   return (
     <div className="space-y-3">
       {/* Editor de BlockNote */}
-      <div className="blocknote-editor-wrapper rounded-lg py-4 overflow-hidden border border-gray-200 bg-white">
-        <BlockNoteView editor={editor} editable={!readOnly} theme="light" />
+      <div className="blocknote-editor-wrapper rounded-lg py-4 overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <BlockNoteView
+          editor={editor}
+          editable={!readOnly}
+          theme={isDark ? "dark" : "light"}
+        />
       </div>
       {/* Barra de estado */}
       {!readOnly && (
-        <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
-          <div className="flex items-center gap-2 text-xs text-gray-600">
+        <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
             {saving ? (
               <>
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -266,7 +275,7 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
               </>
             ) : lastSaved ? (
               <>
-                <Save className="h-3.5 w-3.5 text-green-600" />
+                <Save className="h-3.5 w-3.5 text-green-600 dark:text-green-500" />
                 <span>Guardado {lastSaved.toLocaleTimeString("es-ES")}</span>
               </>
             ) : (

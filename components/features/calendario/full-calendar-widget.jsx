@@ -13,12 +13,7 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
 import esLocale from "@fullcalendar/core/locales/es";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, RefreshCw, Plus, Trash2 } from "lucide-react";
 import { EventDialog } from "./event-dialog";
@@ -156,7 +151,6 @@ export const FullCalendarWidget = forwardRef(function FullCalendarWidget(
         console.error("❌ Error al mover evento:", error);
         alert(`Error al mover evento: ${error.error || "Error desconocido"}`);
       } else {
-       
         await fetchEvents();
         onEventUpdate?.();
       }
@@ -292,65 +286,65 @@ export const FullCalendarWidget = forwardRef(function FullCalendarWidget(
 
   return (
     <>
-      <Card className="h-full">
-        <CardContent>
-          {loading ? (
-            <div className="flex items-center justify-center py-1">
-              <div className="text-center">
-                <RefreshCw className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">
-                  Cargando calendario...
-                </p>
-              </div>
+      <CardContent className="p-6">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <RefreshCw className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-2" />
+              <p className="text-sm text-gray-500">Cargando calendario...</p>
             </div>
-          ) : (
-            <div className="fullcalendar-wrapper">
-              <FullCalendar
-                ref={calendarRef}
-                plugins={[
-                  dayGridPlugin,
-                  timeGridPlugin,
-                  interactionPlugin,
-                  listPlugin,
-                ]}
-                initialView="dayGridMonth"
-                locale={esLocale}
-                headerToolbar={{
-                  left: "prev,next",
-                  center: "title",
-                  right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek",
-                }}
-                buttonText={{
-                  month: "Mes",
-                  week: "Semana",
-                  day: "Día",
-                  list: "Lista",
-                }}
-                events={events}
-                editable={true}
-                selectable={true}
-                selectMirror={true}
-                dayMaxEvents={2}
-                weekends={true}
-                dateClick={handleDateClick}
-                eventClick={handleEventClick}
-                eventDrop={handleEventDrop}
-                eventResize={handleEventResize}
-                height="750px"
-                slotMinTime="09:00:00"
-                slotMaxTime="20:00:00"
-                allDaySlot={true}
-                nowIndicator={true}
-                eventTimeFormat={{
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  meridiem: false,
-                }}
-              />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        ) : (
+          <div className="fullcalendar-wrapper">
+            <FullCalendar
+              ref={calendarRef}
+              plugins={[
+                dayGridPlugin,
+                timeGridPlugin,
+                interactionPlugin,
+                listPlugin,
+              ]}
+              initialView="dayGridMonth"
+              locale={esLocale}
+              headerToolbar={{
+                left: "prev,next",
+                center: "title",
+                right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek",
+              }}
+              buttonText={{
+                month: "Mes",
+                week: "Semana",
+                day: "Día",
+                list: "Lista",
+              }}
+              events={events}
+              editable={true}
+              selectable={true}
+              selectMirror={true}
+              dayMaxEvents={3}
+              weekends={true}
+              fixedWeekCount={false}
+              showNonCurrentDates={true}
+              dateClick={handleDateClick}
+              eventClick={handleEventClick}
+              eventDrop={handleEventDrop}
+              eventResize={handleEventResize}
+              height="auto"
+              contentHeight="auto"
+              aspectRatio={2}
+              slotMinTime="09:00:00"
+              slotMaxTime="20:00:00"
+              allDaySlot={true}
+              nowIndicator={true}
+              eventTimeFormat={{
+                hour: "2-digit",
+                minute: "2-digit",
+                meridiem: false,
+              }}
+            />
+          </div>
+        )}
+      </CardContent>
 
       <EventDialog
         isOpen={isDialogOpen}
@@ -363,37 +357,32 @@ export const FullCalendarWidget = forwardRef(function FullCalendarWidget(
 
       <style jsx global>{`
         .fullcalendar-wrapper {
-          /* Colores principales - Color personalizado #0088FF */
+          /* Colores principales mejorados */
           --fc-border-color: #e5e7eb;
-          --fc-button-bg-color: #0088ff; /* Color principal de botones */
-          --fc-button-border-color: #0088ff;
-          --fc-button-hover-bg-color: #0077ee; /* Color al pasar el mouse */
-          --fc-button-hover-border-color: #0077ee;
-          --fc-button-active-bg-color: #0066dd; /* Color al hacer clic */
-          --fc-button-active-border-color: #0066dd;
-          --fc-today-bg-color: rgba(
-            0,
-            136,
-            255,
-            0.1
-          ); /* Fondo del día actual */
-          --fc-event-bg-color: #80c0ffff; /* Color de los eventos */
-          --fc-event-border-color: #0077ee;
+          --fc-button-bg-color: #3b82f6;
+          --fc-button-border-color: #3b82f6;
+          --fc-button-hover-bg-color: #2563eb;
+          --fc-button-hover-border-color: #2563eb;
+          --fc-button-active-bg-color: #1d4ed8;
+          --fc-button-active-border-color: #1d4ed8;
+          --fc-today-bg-color: rgba(239, 68, 68, 0.05);
+          --fc-event-bg-color: #3b82f6;
+          --fc-event-border-color: #2563eb;
         }
 
         .fullcalendar-wrapper .fc {
           font-family: inherit;
         }
 
-        /* Estilos de los botones - MÁS REDONDEADOS */
+        /* Estilos de los botones modernos */
         .fullcalendar-wrapper .fc-button {
           text-transform: capitalize;
-          font-weight: 400;
-          border-radius: 12px !important; /* Bordes más redondeados */
-          padding: 3px 10px !important;
-          font-size: 14px !important;
+          font-weight: 500;
+          border-radius: 8px !important;
+          padding: 6px 14px !important;
+          font-size: 13px !important;
           transition: all 0.2s ease;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
         }
 
         .fullcalendar-wrapper .fc-button:hover {
@@ -432,83 +421,131 @@ export const FullCalendarWidget = forwardRef(function FullCalendarWidget(
           border-radius: 0 12px 12px 0 !important;
         }
 
-        /* Encabezado del calendario */
+        /* Encabezado del calendario mejorado */
         .fullcalendar-wrapper .fc-toolbar {
-          margin-bottom: 1rem !important;
+          margin-bottom: 1.5rem !important;
+          padding: 0 !important;
         }
 
         .fullcalendar-wrapper .fc-toolbar-title {
           font-size: 1.5rem !important;
           font-weight: 700 !important;
           color: #111827;
+          text-transform: lowercase;
         }
 
-        /* Días de la semana */
+        .fullcalendar-wrapper .fc-toolbar-title::first-letter {
+          text-transform: uppercase;
+        }
+
+        /* Días de la semana mejorados */
         .fullcalendar-wrapper .fc-col-header-cell {
-          background-color: #f9fafb;
+          background-color: #f8fafc;
           font-weight: 600;
-          color: #424344ff;
-          padding: 12px 0 !important;
+          color: #64748b;
+          padding: 14px 0 !important;
           border: none !important;
+          border-bottom: 2px solid #e2e8f0 !important;
           text-transform: uppercase;
           font-size: 0.7rem;
           letter-spacing: 0.05em;
         }
 
-        /* Celdas de los días */
+        /* Celdas de los días mejoradas - MÁS ALTAS */
         .fullcalendar-wrapper .fc-daygrid-day {
-          border-radius: 8px;
-          transition: background-color 0.2s ease;
+          transition: all 0.2s ease;
+          position: relative;
+          min-height: 140px !important;
+        }
+
+        .fullcalendar-wrapper .fc-daygrid-day-frame {
+          min-height: 140px !important;
         }
 
         .fullcalendar-wrapper .fc-daygrid-day:hover {
-          background-color: #f3f4f6;
+          background-color: #f8fafc;
         }
 
         .fullcalendar-wrapper .fc-daygrid-day-number {
-          padding: 8px !important;
-          font-weight: 500;
-          color: #374151;
+          padding: 8px 12px !important;
+          font-weight: 600;
+          color: #1e293b;
+          font-size: 0.95rem;
         }
 
-        /* Día de hoy */
+        /* Días de otros meses con mejor contraste */
+        .fullcalendar-wrapper .fc-day-other .fc-daygrid-day-number {
+          color: #94a3b8;
+          font-weight: 500;
+        }
+
+        .fullcalendar-wrapper .fc-day-other {
+          background-color: #fafafa;
+        }
+
+        /* Día de hoy con diseño destacado */
         .fullcalendar-wrapper .fc-day-today {
-          background-color: var(--fc-today-bg-color) !important;
-          border: 2px solid #0088ff !important;
-          border-radius: 24px !important;
+          background-color: rgba(239, 68, 68, 0.03) !important;
         }
 
         .fullcalendar-wrapper .fc-day-today .fc-daygrid-day-number {
-          color: #0066dd;
+          background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+          color: white !important;
           font-weight: 700;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          display: flex !important;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
         }
 
-        /* Eventos */
+        .fullcalendar-wrapper .fc-day-today .fc-daygrid-day-frame {
+          border: 2px solid #ef4444 !important;
+        }
+
+        /* Eventos con diseño moderno y MEJOR CONTRASTE */
         .fullcalendar-wrapper .fc-event {
           cursor: pointer;
-          border-radius: 18px !important;
-          padding: 4px 8px !important;
+          border-radius: 6px !important;
+          padding: 5px 10px !important;
           margin: 2px 4px !important;
           border: none !important;
-          background-color: var(--fc-event-bg-color) !important;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+          background: linear-gradient(
+            135deg,
+            #3b82f6 0%,
+            #2563eb 100%
+          ) !important;
+          box-shadow: 0 1px 3px rgba(59, 130, 246, 0.25);
           transition: all 0.2s ease;
         }
 
         .fullcalendar-wrapper .fc-event:hover {
-          opacity: 0.9;
           transform: translateY(-1px);
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+          box-shadow: 0 4px 8px rgba(59, 130, 246, 0.35);
         }
 
         .fullcalendar-wrapper .fc-event-title {
-          font-weight: 500;
-          font-size: 0.5rem;
+          font-weight: 700;
+          font-size: 0.8rem;
+          line-height: 1.4;
+          color: #ffffff !important;
         }
 
         .fullcalendar-wrapper .fc-event-time {
-          font-weight: 600;
+          font-weight: 700;
           font-size: 0.75rem;
+          opacity: 1;
+          color: #ffffff !important;
+        }
+
+        .fullcalendar-wrapper .fc-daygrid-event-dot {
+          display: none;
+        }
+
+        .fullcalendar-wrapper .fc-event-main {
+          color: #ffffff !important;
         }
 
         /* Vista de semana y día */
@@ -552,74 +589,36 @@ export const FullCalendarWidget = forwardRef(function FullCalendarWidget(
           background: #94a3b8;
         }
 
-        /* Día actual con borde rojo */
-        .fullcalendar-wrapper .fc-day-today {
-          background-color: rgba(239, 68, 68, 0.05) !important;
-          border: 2px solid #ef4444 !important;
-        }
-
-        .fullcalendar-wrapper .fc-day-today .fc-daygrid-day-number {
-          background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-          color: white !important;
-          font-weight: 700;
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
-          display: flex !important;
-          align-items: center;
-          justify-content: center;
-          margin: 4px;
-        }
-
-        /* Mejorar colores de eventos */
-        .fullcalendar-wrapper .fc-event {
-          background: #3b82f6 !important;
-          border: 1px solid #2563eb !important;
-          border-radius: 6px !important;
-          padding: 4px 7px !important;
-          font-weight: 500 !important;
-          font-size: 0.5rem !important;
-          line-height: 1.4 !important;
-          box-shadow: 0 1px 3px rgba(59, 130, 246, 0.15) !important;
-          transition: all 0.2s ease !important;
-          cursor: pointer !important;
-        }
-
-        .fullcalendar-wrapper .fc-event:hover {
-          background: #2563eb !important;
-          box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3) !important;
-          transform: translateY(-1px) !important;
-        }
-
-        .fullcalendar-wrapper .fc-event-title {
-          font-weight: 600 !important;
-          font-size: 0.6rem !important;
-          line-height: 1.3 !important;
-        }
-
-        .fullcalendar-wrapper .fc-event-time {
-          font-size: 0.7rem !important;
-          opacity: 0.95 !important;
-          font-weight: 500 !important;
-        }
-
-        /* Mejorar el +X más */
+        /* Mejorar el +X más con diseño moderno y MEJOR CONTRASTE */
         .fullcalendar-wrapper .fc-more-link {
-          font-size: 0.75rem !important;
-          font-weight: 600 !important;
-          color: #3b82f6 !important;
-          padding: 2px 4px !important;
-          margin-top: 2px !important;
+          font-size: 0.8rem !important;
+          font-weight: 700 !important;
+          color: #1e40af !important;
+          padding: 3px 8px !important;
+          margin-top: 3px !important;
+          border-radius: 4px !important;
+          transition: all 0.2s ease !important;
+          background-color: #dbeafe !important;
         }
 
         .fullcalendar-wrapper .fc-more-link:hover {
-          color: #2563eb !important;
-          text-decoration: underline !important;
+          background-color: #bfdbfe !important;
+          color: #1e3a8a !important;
         }
 
         /* Mejorar legibilidad en vista de mes */
         .fullcalendar-wrapper .fc-daygrid-event-harness {
           margin-bottom: 2px !important;
+        }
+
+        /* Bordes de las celdas más suaves */
+        .fullcalendar-wrapper .fc-scrollgrid {
+          border-color: #e5e7eb !important;
+        }
+
+        .fullcalendar-wrapper td,
+        .fullcalendar-wrapper th {
+          border-color: #f1f5f9 !important;
         }
 
         /* Animaciones */

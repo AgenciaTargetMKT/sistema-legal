@@ -74,7 +74,7 @@ export default function ProcesosTable({
 
   // Estados para paginación
   const [paginaActual, setPaginaActual] = useState(1);
-  const [elementosPorPagina, setElementosPorPagina] = useState(20);
+  const [elementosPorPagina, setElementosPorPagina] = useState(50);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -569,75 +569,6 @@ export default function ProcesosTable({
 
   return (
     <div className="w-full space-y-3">
-      {/* Controles superiores: Paginación y acciones */}
-      <div className="flex items-center justify-between">
-        {/* Botón Nueva fila */}
-        <button
-          onClick={crearNuevoProceso}
-          className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2 shadow-sm"
-        >
-          <span className="text-lg">+</span>
-          <span>Nuevo proceso</span>
-        </button>
-
-        {/* Paginación y selector de elementos */}
-        {procesos.length > 0 && (
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Mostrar:</span>
-              <select
-                value={elementosPorPagina}
-                onChange={(e) =>
-                  cambiarElementosPorPagina(Number(e.target.value))
-                }
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none bg-white"
-              >
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-            </div>
-
-            <span className="text-sm text-gray-600">
-              {indexPrimero + 1}-{Math.min(indexUltimo, procesos.length)} de{" "}
-              {procesos.length}
-            </span>
-
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => cambiarPagina(paginaActual - 1)}
-                disabled={paginaActual === 1}
-                className={clsx(
-                  "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
-                  paginaActual === 1
-                    ? "text-gray-400 cursor-not-allowed"
-                    : "text-gray-700 hover:bg-gray-100"
-                )}
-              >
-                ←
-              </button>
-
-              <span className="px-3 py-1.5 text-sm font-medium text-gray-700">
-                {paginaActual} / {totalPaginas}
-              </span>
-
-              <button
-                onClick={() => cambiarPagina(paginaActual + 1)}
-                disabled={paginaActual === totalPaginas}
-                className={clsx(
-                  "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
-                  paginaActual === totalPaginas
-                    ? "text-gray-400 cursor-not-allowed"
-                    : "text-gray-700 hover:bg-gray-100"
-                )}
-              >
-                →
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* Barra de selección múltiple */}
       {seleccionados.size > 0 && (
         <div className="px-4 py-2 bg-primary-50 border border-primary-200 rounded-lg flex items-center justify-between">
@@ -656,16 +587,16 @@ export default function ProcesosTable({
       )}
 
       {/* Tabla */}
-      <div className="w-full overflow-auto bg-white rounded-lg shadow-sm border">
+      <div className="w-full overflow-auto bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
         >
           <table className="w-full border-collapse">
-            <thead className="bg-gray-50 sticky top-0 z-10">
+            <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
               <tr>
-                <th className="px-2 py-3 text-center text-xs font-semibold text-gray-700 border-b w-10">
+                <th className="px-2 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-100 border-b w-10">
                   <input
                     type="checkbox"
                     checked={
@@ -676,7 +607,7 @@ export default function ProcesosTable({
                     className="cursor-pointer"
                   />
                 </th>
-                <th className="px-2 py-3 text-center text-xs font-semibold text-gray-700 border-b w-10">
+                <th className="px-2 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-100 border-b w-10">
                   ⋮⋮
                 </th>
                 <ColumnHeader
@@ -759,9 +690,108 @@ export default function ProcesosTable({
                 ))}
               </tbody>
             </SortableContext>
+            <tbody>
+              <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50 group">
+                <td colSpan="10" className="px-3 py-2.5">
+                  <button
+                    onClick={crearNuevoProceso}
+                    className="w-full text-left text-sm text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400 transition-colors flex items-center gap-2 py-1"
+                  >
+                    <span className="text-base">+</span>
+                    <span>Agregar proceso</span>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
           </table>
         </DndContext>
       </div>
+
+      {/* Paginación inferior - Compacta */}
+      {procesos.length > 0 && (
+        <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+          {/* Selector e info */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-600 dark:text-gray-400">
+              Mostrar
+            </span>
+            <select
+              value={elementosPorPagina}
+              onChange={(e) =>
+                cambiarElementosPorPagina(Number(e.target.value))
+              }
+              className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md focus:ring-1 focus:ring-primary-400 focus:border-primary-400 outline-none bg-white dark:bg-gray-800 dark:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
+            >
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {indexPrimero + 1}-{Math.min(indexUltimo, procesos.length)} de{" "}
+              {procesos.length}
+            </span>
+          </div>
+
+          {/* Controles de navegación */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => cambiarPagina(paginaActual - 1)}
+              disabled={paginaActual === 1}
+              className={clsx(
+                "p-1.5 text-xs rounded-md transition-colors",
+                paginaActual === 1
+                  ? "text-gray-300 cursor-not-allowed"
+                  : "text-gray-600 hover:bg-gray-100 hover:text-primary-600"
+              )}
+              title="Anterior"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
+            </button>
+
+            <span className="px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
+              {paginaActual} / {totalPaginas}
+            </span>
+
+            <button
+              onClick={() => cambiarPagina(paginaActual + 1)}
+              disabled={paginaActual === totalPaginas}
+              className={clsx(
+                "p-1.5 text-xs rounded-md transition-colors",
+                paginaActual === totalPaginas
+                  ? "text-gray-300 cursor-not-allowed"
+                  : "text-gray-600 hover:bg-gray-100 hover:text-primary-600"
+              )}
+              title="Siguiente"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -800,7 +830,9 @@ function SortableRow({
     <tr
       ref={setNodeRef}
       style={style}
-      className={clsx("border-b hover:bg-gray-50 group")}
+      className={clsx(
+        "border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 group"
+      )}
     >
       <td className="px-2 py-2 text-center border-r">
         <input
@@ -814,7 +846,7 @@ function SortableRow({
         <div
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing flex items-center justify-center text-gray-400 hover:text-gray-600"
+          className="cursor-grab active:cursor-grabbing flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
         >
           <GripVertical className="w-4 h-4" />
         </div>
@@ -825,7 +857,7 @@ function SortableRow({
         iconButton={
           <button
             onClick={() => onProcesoClick?.(proceso)}
-            className="cursor-pointer text-gray-500 hover:text-primary-600 hover:bg-gray-50 transition-colors opacity-0 group-hover:opacity-100"
+            className="cursor-pointer text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors opacity-0 group-hover:opacity-100"
             title="Abrir panel"
           >
             <PanelRightOpen className="h-3.5 w-3.5" />
@@ -988,7 +1020,9 @@ function TextCell({ value, onUpdate, iconButton }) {
     <td
       className={clsx(
         "px-3 py-1.5 border-r text-sm transition-all",
-        editing ? "bg-primary-50/50" : "hover:bg-gray-50 cursor-text"
+        editing
+          ? "bg-primary-50/50 dark:bg-primary-900/20"
+          : "hover:bg-gray-50 dark:hover:bg-gray-800 cursor-text"
       )}
     >
       <div className="flex items-center gap-2 min-w-[180px]">
@@ -1003,7 +1037,7 @@ function TextCell({ value, onUpdate, iconButton }) {
               style={{ caretColor: "#2563eb" }}
             />
           ) : (
-            <div className="min-h-5 font-medium text-gray-900">
+            <div className="min-h-5 font-medium text-gray-900 dark:text-gray-100">
               {currentValue || ""}
             </div>
           )}
@@ -1086,7 +1120,9 @@ function SearchableSelectCell({
               {value}
             </span>
           ) : (
-            <span className="text-gray-400 text-xs">Seleccionar...</span>
+            <span className="text-gray-400 dark:text-gray-500 text-xs">
+              Seleccionar...
+            </span>
           )}
         </div>
       </td>
@@ -1098,17 +1134,17 @@ function SearchableSelectCell({
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-50 bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-[250px] max-w-[350px] max-h-[300px] overflow-hidden"
+            className="z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl rounded-xl py-1 min-w-[250px] max-w-[350px] max-h-[300px] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Buscador */}
-            <div className="px-2 py-2 border-b sticky top-0 bg-white">
+            <div className="px-2 py-2 border-b dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800">
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Buscar cliente..."
-                className="w-full px-2 py-1 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-primary-400"
+                className="w-full px-2 py-1 text-sm border dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-primary-400 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-400"
                 autoFocus
               />
             </div>
@@ -1120,7 +1156,7 @@ function SearchableSelectCell({
                 return (
                   <div
                     key={option.id}
-                    className="px-3 py-2 hover:bg-primary-50 cursor-pointer text-sm transition-colors"
+                    className="px-3 py-2 hover:bg-primary-50 dark:hover:bg-gray-700 cursor-pointer text-sm transition-colors"
                     onClick={() => handleSelect(option)}
                   >
                     <span
@@ -1137,7 +1173,7 @@ function SearchableSelectCell({
               })}
 
               {filteredOptions.length === 0 && (
-                <div className="px-3 py-2 text-sm text-gray-400">
+                <div className="px-3 py-2 text-sm text-gray-400 dark:text-gray-500">
                   No se encontraron clientes
                 </div>
               )}
@@ -1149,7 +1185,7 @@ function SearchableSelectCell({
   );
 }
 
-// Componente de celda select con dropdown tipo Notion - Estilo Badge
+// Componente de celda select con dropdown compacto - Estilo Badge (para Materia, Rol Cliente, etc.)
 function SelectCell({
   value,
   options,
@@ -1157,12 +1193,9 @@ function SelectCell({
   color,
   textColor,
   className,
-  allowCreate = false,
-  onCreateNew,
   placeholder = "Seleccionar...",
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
   const [referenceElement, setReferenceElement] = useState(null);
   const [popperElement, setPopperElement] = useState(null);
   const { styles, attributes } = usePopper(referenceElement, popperElement, {
@@ -1170,25 +1203,11 @@ function SelectCell({
     strategy: "fixed",
   });
 
-  const filteredOptions = options.filter((opt) =>
-    opt.nombre.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const opcionActual = options.find((opt) => opt.nombre === value);
 
   const handleSelect = (option) => {
     onUpdate(option.nombre);
     setIsOpen(false);
-    setSearchTerm("");
-  };
-
-  const handleCreateNew = async () => {
-    if (!searchTerm.trim() || !allowCreate || !onCreateNew) return;
-
-    const nuevoEstado = await onCreateNew(searchTerm.trim());
-    if (nuevoEstado) {
-      onUpdate(nuevoEstado.nombre);
-      setIsOpen(false);
-      setSearchTerm("");
-    }
   };
 
   useEffect(() => {
@@ -1215,31 +1234,26 @@ function SelectCell({
       <td
         ref={setReferenceElement}
         className={clsx(
-          "px-3 py-1.5 border-r cursor-pointer transition-all align-middle",
-          isOpen ? "bg-gray-50" : "hover:bg-gray-50",
+          "px-3 py-1.5 border-r cursor-pointer transition-all align-middle relative",
           className
         )}
         onClick={() => setIsOpen(!isOpen)}
       >
-        <div className="flex items-center min-h-6">
-          {value ? (
+        <div className="inline-flex items-center">
+          {opcionActual ? (
             <span
               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all hover:opacity-80"
               style={{
-                backgroundColor: color || "#f3f4f6",
-                color: textColor || "#374151",
+                backgroundColor: `${opcionActual.color}20`,
+                color: opcionActual.color,
               }}
             >
-              {textColor && (
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: textColor }}
-                />
-              )}
-              {value}
+              {opcionActual.nombre}
             </span>
           ) : (
-            <span className="text-gray-400 text-xs">{placeholder}</span>
+            <span className="text-xs text-gray-400 px-2 py-1">
+              {placeholder}
+            </span>
           )}
         </div>
       </td>
@@ -1251,75 +1265,25 @@ function SelectCell({
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-50 bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-[200px] max-w-[300px] max-h-[300px] overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
+            className="z-9999 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl rounded-xl py-1 min-w-36 max-w-48 max-h-64 overflow-y-auto"
           >
-            {/* Buscador */}
-            {allowCreate && (
-              <div className="px-2 py-2 border-b sticky top-0 bg-white">
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && searchTerm.trim()) {
-                      handleCreateNew();
-                    }
+            {options.map((option) => (
+              <button
+                key={option.id}
+                onClick={() => handleSelect(option)}
+                className="w-full px-2 py-0.5 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                  style={{
+                    backgroundColor: `${option.color}20`,
+                    color: option.color,
                   }}
-                  placeholder="Buscar o crear..."
-                  className="w-full px-2 py-1 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-primary-400"
-                  autoFocus
-                />
-              </div>
-            )}
-
-            {/* Lista de opciones */}
-            <div className="overflow-y-auto max-h-60">
-              {filteredOptions.map((option) => (
-                <div
-                  key={option.id}
-                  className="px-3 py-2 hover:bg-primary-50 cursor-pointer text-sm transition-colors"
-                  onClick={() => handleSelect(option)}
                 >
-                  {option.color ? (
-                    <span
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-                      style={{
-                        backgroundColor: `${option.color}20`,
-                        color: option.color,
-                      }}
-                    >
-                      <span
-                        className="w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: option.color }}
-                      />
-                      {option.nombre}
-                    </span>
-                  ) : (
-                    option.nombre
-                  )}
-                </div>
-              ))}
-
-              {/* Opción de crear nuevo (estilo Notion) */}
-              {allowCreate &&
-                searchTerm.trim() &&
-                filteredOptions.length === 0 && (
-                  <div
-                    className="px-3 py-2 hover:bg-primary-50 cursor-pointer text-sm transition-colors flex items-center gap-2 text-primary-600 font-medium border-t"
-                    onClick={handleCreateNew}
-                  >
-                    <span className="text-lg">+</span>
-                    Crear "{searchTerm}"
-                  </div>
-                )}
-
-              {!allowCreate && filteredOptions.length === 0 && (
-                <div className="px-3 py-2 text-sm text-gray-400">
-                  No hay opciones
-                </div>
-              )}
-            </div>
+                  {option.nombre}
+                </span>
+              </button>
+            ))}
           </div>,
           document.body
         )}
@@ -1340,7 +1304,6 @@ function EstadoSelectCell({
   placeholder = "Seleccionar...",
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
   const [referenceElement, setReferenceElement] = useState(null);
   const [popperElement, setPopperElement] = useState(null);
   const { styles, attributes } = usePopper(referenceElement, popperElement, {
@@ -1348,45 +1311,25 @@ function EstadoSelectCell({
     strategy: "fixed",
   });
 
-  // Filtrar opciones por búsqueda
-  const filteredOptions = options.filter((opt) =>
-    opt.nombre.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Buscar el estado actual en las opciones
+  const estadoActual = options.find((e) => e.nombre === value);
 
-  // Agrupar opciones por categoría
+  // Agrupar estados por categoría
+  const estadosAgrupados = {
+    Pendiente: options.filter((e) => e.categoria === "Pendiente"),
+    En_curso: options.filter((e) => e.categoria === "En_curso"),
+    Completado: options.filter((e) => e.categoria === "Completado"),
+  };
+
   const categorias = [
-    { key: "Pendiente", label: "📋 Pendiente", color: "#6B7280" },
-    { key: "En_curso", label: "⏳ En curso", color: "#3B82F6" },
-    { key: "Completado", label: "✅ Completado", color: "#10B981" },
+    { key: "Pendiente", label: "Pendiente" },
+    { key: "En_curso", label: "En curso" },
+    { key: "Completado", label: "Completado" },
   ];
-
-  const opcionesPorCategoria = categorias.map((cat) => ({
-    ...cat,
-    opciones: filteredOptions
-      .filter((opt) => opt.categoria === cat.key)
-      .sort((a, b) => (a.orden || 0) - (b.orden || 0)),
-  }));
-
-  // Opciones sin categoría
-  const opcionesSinCategoria = filteredOptions.filter(
-    (opt) => !opt.categoria || !categorias.some((c) => c.key === opt.categoria)
-  );
 
   const handleSelect = (option) => {
     onUpdate(option.nombre);
     setIsOpen(false);
-    setSearchTerm("");
-  };
-
-  const handleCreateNew = async () => {
-    if (!searchTerm.trim() || !allowCreate || !onCreateNew) return;
-
-    const nuevoEstado = await onCreateNew(searchTerm.trim());
-    if (nuevoEstado) {
-      onUpdate(nuevoEstado.nombre);
-      setIsOpen(false);
-      setSearchTerm("");
-    }
   };
 
   useEffect(() => {
@@ -1413,31 +1356,26 @@ function EstadoSelectCell({
       <td
         ref={setReferenceElement}
         className={clsx(
-          "px-3 py-1.5 border-r cursor-pointer transition-all align-middle",
-          isOpen ? "bg-gray-50" : "hover:bg-gray-50",
+          "px-3 py-1.5 border-r cursor-pointer transition-all align-middle relative",
           className
         )}
         onClick={() => setIsOpen(!isOpen)}
       >
-        <div className="flex items-center min-h-6">
-          {value ? (
+        <div className="inline-flex items-center">
+          {estadoActual ? (
             <span
               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all hover:opacity-80"
               style={{
-                backgroundColor: color || "#f3f4f6",
-                color: textColor || "#374151",
+                backgroundColor: `${estadoActual.color}20`,
+                color: estadoActual.color,
               }}
             >
-              {textColor && (
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: textColor }}
-                />
-              )}
-              {value}
+              {estadoActual.nombre}
             </span>
           ) : (
-            <span className="text-gray-400 text-xs">{placeholder}</span>
+            <span className="text-xs text-gray-400 px-2 py-1">
+              {placeholder}
+            </span>
           )}
         </div>
       </td>
@@ -1449,122 +1387,38 @@ function EstadoSelectCell({
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className="z-50 bg-white border border-gray-200 shadow-xl rounded-xl py-1 min-w-[250px] max-w-[320px] max-h-[400px] overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
+            className="z-9999 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl rounded-xl py-1 min-w-56 max-w-72 max-h-96 overflow-y-auto"
           >
-            {/* Buscador */}
-            <div className="px-2 py-2 border-b sticky top-0 bg-white z-10">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && searchTerm.trim() && allowCreate) {
-                    handleCreateNew();
-                  }
-                }}
-                placeholder="Buscar estado..."
-                className="w-full px-2 py-1 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-primary-400"
-                autoFocus
-              />
-            </div>
+            {categorias.map((categoria) => {
+              const estadosCategoria = estadosAgrupados[categoria.key];
+              if (!estadosCategoria || estadosCategoria.length === 0)
+                return null;
 
-            {/* Lista de opciones agrupadas por categoría */}
-            <div className="overflow-y-auto max-h-80">
-              {opcionesPorCategoria.map(
-                (categoria) =>
-                  categoria.opciones.length > 0 && (
-                    <div key={categoria.key}>
-                      {/* Header de categoría */}
-                      <div
-                        className="my-3 ring-2 px-3 py-1.5 text-xs font-semibold text-gray-500 bg-gray-50 sticky top-0 border-b border-gray-100"
-                        style={{ color: categoria.color }}
-                      >
-                        {categoria.label}
-                      </div>
-                      {/* Opciones de la categoría */}
-                      {categoria.opciones.map((option) => (
-                        <div
-                          key={option.id}
-                          className="px-3 py-2 hover:bg-primary-50 cursor-pointer text-sm transition-colors"
-                          onClick={() => handleSelect(option)}
-                        >
-                          <span
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-                            style={{
-                              backgroundColor: option.color
-                                ? `${option.color}20`
-                                : "#f3f4f6",
-                              color: option.color || "#374151",
-                            }}
-                          >
-                            {option.color && (
-                              <span
-                                className="w-2 h-2 rounded-full shrink-0"
-                                style={{ backgroundColor: option.color }}
-                              />
-                            )}
-                            {option.nombre}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )
-              )}
-
-              {/* Opciones sin categoría */}
-              {opcionesSinCategoria.length > 0 && (
-                <div>
-                  <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 bg-gray-50 sticky top-0 border-b border-gray-100">
-                    📁 Otros
+              return (
+                <div key={categoria.key} className="mb-0.5 last:mb-0">
+                  <div className="px-2 py-0.5 text-[9px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                    {categoria.label}
                   </div>
-                  {opcionesSinCategoria.map((option) => (
-                    <div
-                      key={option.id}
-                      className="px-3 py-2 hover:bg-primary-50 cursor-pointer text-sm transition-colors"
-                      onClick={() => handleSelect(option)}
+                  {estadosCategoria.map((estado) => (
+                    <button
+                      key={estado.id}
+                      onClick={() => handleSelect(estado)}
+                      className="w-full px-2 py-0.5 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
                       <span
-                        className="inline-block px-2 py-0.5 rounded text-xs font-medium"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
                         style={{
-                          backgroundColor: option.color
-                            ? `${option.color}20`
-                            : "#f3f4f6",
-                          color: option.color || "#374151",
+                          backgroundColor: `${estado.color}20`,
+                          color: estado.color,
                         }}
                       >
-                        {option.color && (
-                          <span
-                            className="w-2 h-2 rounded-full shrink-0"
-                            style={{ backgroundColor: option.color }}
-                          />
-                        )}
-                        {option.nombre}
+                        {estado.nombre}
                       </span>
-                    </div>
+                    </button>
                   ))}
                 </div>
-              )}
-
-              {/* Opción de crear nuevo */}
-              {allowCreate &&
-                searchTerm.trim() &&
-                filteredOptions.length === 0 && (
-                  <div
-                    className="px-3 py-2 hover:bg-primary-50 cursor-pointer text-sm transition-colors flex items-center gap-2 text-primary-600 font-medium border-t"
-                    onClick={handleCreateNew}
-                  >
-                    <span className="text-lg">+</span>
-                    Crear "{searchTerm}"
-                  </div>
-                )}
-
-              {filteredOptions.length === 0 && !searchTerm.trim() && (
-                <div className="px-3 py-2 text-sm text-gray-400">
-                  No hay estados disponibles
-                </div>
-              )}
-            </div>
+              );
+            })}
           </div>,
           document.body
         )}
@@ -1696,13 +1550,15 @@ function EmpleadosProcesoDisplay({ empleados, onProcesoClick }) {
             );
           })
         ) : (
-          <span className="text-xs text-gray-400">Sin asignar</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500">
+            Sin asignar
+          </span>
         )}
 
         {/* Botón para abrir panel (visible en hover) */}
         <button
           onClick={() => onProcesoClick?.()}
-          className="ml-1 text-gray-300 hover:text-primary-600 transition-colors opacity-0 group-hover:opacity-100"
+          className="ml-1 text-gray-300 dark:text-gray-600 hover:text-primary-600 dark:hover:text-primary-400 transition-colors opacity-0 group-hover:opacity-100"
           title="Editar asignados"
         >
           <PanelRightOpen className="h-3.5 w-3.5" />

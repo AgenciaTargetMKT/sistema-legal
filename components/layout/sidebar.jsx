@@ -19,6 +19,7 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  Settings,
 } from "lucide-react";
 
 const menuItems = [
@@ -35,14 +36,14 @@ const menuItems = [
     icon: Calendar,
   },
   {
-    name: "Procesos",
-    href: "/procesos",
-    icon: Scale,
-  },
-  {
     name: "Clientes",
     href: "/clientes",
     icon: Users,
+  },
+  {
+    name: "Procesos",
+    href: "/procesos",
+    icon: Scale,
   },
 
   {
@@ -60,6 +61,11 @@ const menuItems = [
     name: "Empleados",
     href: "/empleados",
     icon: UserCog,
+  },
+  {
+    name: "Catálogos",
+    href: "/catalogos",
+    icon: Settings,
   },
 ];
 
@@ -138,14 +144,14 @@ const SidebarComponent = ({ empleado, onSignOut, isOpen, onClose }) => {
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
-        <div className="flex flex-col h-full bg-white/95 backdrop-blur-xl lg:rounded-2xl border border-gray-200/50 relative">
+        <div className="flex flex-col h-full bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl lg:rounded-2xl border border-gray-200/50 dark:border-gray-700/50 relative">
           {/* Logo y botón cerrar */}
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
             className={cn(
-              "flex items-center h-20 border-b border-gray-100",
+              "flex items-center h-20 border-b border-gray-100 dark:border-gray-800",
               // Móvil: siempre expandido con espacio entre
               "justify-between px-6",
               // Tablet (md-lg): minimizado (solo icono centrado)
@@ -164,10 +170,10 @@ const SidebarComponent = ({ empleado, onSignOut, isOpen, onClose }) => {
                 <Scale className="h-6 w-6" />
               </motion.div>
               <div className="min-w-0 flex-1">
-                <h1 className="text-base font-bold text-gray-900 truncate">
+                <h1 className="text-base font-bold text-gray-900 dark:text-gray-100 truncate">
                   Sistema Legal
                 </h1>
-                <p className="text-xs text-gray-500 font-medium truncate">
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium truncate">
                   Gestión Legal
                 </p>
               </div>
@@ -199,10 +205,10 @@ const SidebarComponent = ({ empleado, onSignOut, isOpen, onClose }) => {
                 <Scale className="h-6 w-6" />
               </motion.div>
               <div className="min-w-0 flex-1">
-                <h1 className="text-base font-bold text-gray-900 truncate">
+                <h1 className="text-base font-bold text-gray-900 dark:text-gray-100 truncate">
                   Sistema Legal
                 </h1>
-                <p className="text-xs text-gray-500 font-medium truncate">
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium truncate">
                   Gestión Legal
                 </p>
               </div>
@@ -213,7 +219,7 @@ const SidebarComponent = ({ empleado, onSignOut, isOpen, onClose }) => {
               variant="ghost"
               size="icon"
               onClick={onClose}
-              className="lg:hidden hover:bg-gray-100 rounded-xl"
+              className="lg:hidden hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl"
             >
               <X className="h-5 w-5" />
             </Button>
@@ -303,7 +309,7 @@ const SidebarComponent = ({ empleado, onSignOut, isOpen, onClose }) => {
                   {/* Tooltip cuando está minimizado (tablet y desktop minimizado) */}
                   <div
                     className={cn(
-                      "fixed left-20 md:left-22 lg:left-24 px-2.5 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-md shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 whitespace-nowrap",
+                      "fixed left-20 md:left-22 lg:left-24 px-2.5 py-1.5 bg-gray-900 dark:bg-gray-700 text-white text-xs font-medium rounded-md shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 whitespace-nowrap",
                       // Mostrar solo en tablet o desktop minimizado
                       "hidden md:block",
                       !isMinimized && "xl:hidden"
@@ -311,7 +317,7 @@ const SidebarComponent = ({ empleado, onSignOut, isOpen, onClose }) => {
                     style={{ top: "inherit", zIndex: 9999 }}
                   >
                     {item.name}
-                    <div className="absolute right-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-[6px] border-b-[6px] border-r-[6px] border-transparent border-r-gray-900" />
+                    <div className="absolute right-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-[6px] border-b-[6px] border-r-[6px] border-transparent border-r-gray-900 dark:border-r-gray-700" />
                   </div>
                 </motion.div>
               );
@@ -324,7 +330,7 @@ const SidebarComponent = ({ empleado, onSignOut, isOpen, onClose }) => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.4 }}
             className={cn(
-              "border-t border-gray-100 bg-gray-50/50",
+              "border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50",
               // Móvil: padding normal
               "p-3",
               // Tablet: padding reducido
@@ -341,7 +347,7 @@ const SidebarComponent = ({ empleado, onSignOut, isOpen, onClose }) => {
               <Button
                 variant="outline"
                 className={cn(
-                  "w-full h-10 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 rounded-lg font-medium text-sm shadow-sm justify-center",
+                  "w-full h-10 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950 border-red-200 dark:border-red-800 rounded-lg font-medium text-sm shadow-sm justify-center",
                   // Tablet: centrado sin padding
                   "md:px-0",
                   // Desktop XL: depende de isMinimized
@@ -370,7 +376,7 @@ const SidebarComponent = ({ empleado, onSignOut, isOpen, onClose }) => {
               {/* Tooltip para botón de cerrar sesión cuando está minimizado */}
               <div
                 className={cn(
-                  "fixed left-20 md:left-22 lg:left-24 bottom-6 px-2.5 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-md shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 whitespace-nowrap",
+                  "fixed left-20 md:left-22 lg:left-24 bottom-6 px-2.5 py-1.5 bg-gray-900 dark:bg-gray-700 text-white text-xs font-medium rounded-md shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 whitespace-nowrap",
                   // Mostrar solo en tablet o desktop minimizado
                   "hidden md:block",
                   !isMinimized && "xl:hidden"
@@ -378,7 +384,7 @@ const SidebarComponent = ({ empleado, onSignOut, isOpen, onClose }) => {
                 style={{ zIndex: 9999 }}
               >
                 Cerrar Sesión
-                <div className="absolute right-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-[6px] border-b-[6px] border-r-[6px] border-transparent border-r-gray-900" />
+                <div className="absolute right-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-[6px] border-b-[6px] border-r-[6px] border-transparent border-r-gray-900 dark:border-r-gray-700" />
               </div>
             </motion.div>
           </motion.div>

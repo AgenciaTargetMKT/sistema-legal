@@ -80,9 +80,11 @@ export default function ColumnHeader({
   if (!canSort) {
     const IconComponent = icon || COLUMN_ICONS[columnId];
     return (
-      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 border-b border-r">
+      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-100 border-b dark:border-gray-700 border-r dark:border-r-gray-700">
         <div className="flex items-center gap-2">
-          {IconComponent && <IconComponent className="w-4 h-4 text-gray-500" />}
+          {IconComponent && (
+            <IconComponent className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+          )}
           <span>{label}</span>
         </div>
       </th>
@@ -93,13 +95,13 @@ export default function ColumnHeader({
 
   return (
     <>
-      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 border-b border-r">
+      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-100 border-b dark:border-gray-700 border-r dark:border-r-gray-700">
         <div
           ref={setReferenceElement}
           onClick={() => setShowMenu(!showMenu)}
           className={clsx(
-            "flex items-center gap-2 cursor-pointer hover:text-gray-900 transition-colors group",
-            showMenu && "text-blue-600"
+            "flex items-center gap-2 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors group",
+            showMenu && "text-blue-600 dark:text-blue-400"
           )}
         >
           {IconComponent && <IconComponent className="w-4 h-4" />}
@@ -121,15 +123,15 @@ export default function ColumnHeader({
             ref={setPopperElement}
             style={styles.popper}
             {...attributes.popper}
-            className=" bg-white border border-gray-200 shadow-xl rounded-lg py-1 min-w-[200px]"
+            className=" bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl rounded-lg py-1 min-w-[200px]"
           >
             <button
               onClick={() => handleSort("asc")}
               className={clsx(
-                "w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-3 transition-colors",
+                "w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3 transition-colors text-gray-700 dark:text-gray-300",
                 currentSort?.column === columnId &&
                   currentSort?.direction === "asc" &&
-                  "bg-blue-50 text-blue-600"
+                  "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
               )}
             >
               <ArrowUp className="w-4 h-4" />
@@ -142,10 +144,10 @@ export default function ColumnHeader({
             <button
               onClick={() => handleSort("desc")}
               className={clsx(
-                "w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-3 transition-colors",
+                "w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3 transition-colors text-gray-700 dark:text-gray-300",
                 currentSort?.column === columnId &&
                   currentSort?.direction === "desc" &&
-                  "bg-blue-50 text-blue-600"
+                  "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
               )}
             >
               <ArrowDown className="w-4 h-4" />
@@ -155,10 +157,10 @@ export default function ColumnHeader({
                   <Check className="w-4 h-4 ml-auto" />
                 )}
             </button>
-            <div className="border-t border-gray-100 my-1" />
+            <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
             <button
               onClick={() => handleSort(null)}
-              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-3 transition-colors text-gray-600"
+              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3 transition-colors text-gray-600 dark:text-gray-400"
             >
               <ArrowUpDown className="w-4 h-4" />
               <span>Limpiar ordenamiento</span>
