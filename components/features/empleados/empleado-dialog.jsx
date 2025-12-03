@@ -121,8 +121,6 @@ export default function EmpleadoDialog({
         }
       );
 
-      console.log("Respuesta de creación:", response.status);
-
       if (!response.ok) {
         const errorText = await response.text();
         console.error("Error response:", errorText);

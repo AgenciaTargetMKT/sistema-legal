@@ -10,7 +10,7 @@ export function useTareas(options = {}) {
 
   // Función para refetch que será estable
   const forceRefetch = useCallback(() => {
-    console.log("🔄 Forzando refetch de tareas...");
+   
     queryClient.invalidateQueries({ queryKey: ["tareas"] });
     queryClient.refetchQueries({ queryKey: ["tareas"], type: "active" });
   }, [queryClient]);
@@ -85,7 +85,7 @@ export function useTareas(options = {}) {
         "postgres_changes",
         { event: "*", schema: "public", table: "tareas_empleados_designados" },
         () => {
-          console.log("🔥 [DESIGNADOS] Cambio detectado");
+        
           forceRefetch();
         }
       )
@@ -97,7 +97,7 @@ export function useTareas(options = {}) {
           table: "tareas_empleados_responsables",
         },
         () => {
-          console.log("🔥 [RESPONSABLES] Cambio detectado");
+        
           forceRefetch();
         }
       )
@@ -105,20 +105,20 @@ export function useTareas(options = {}) {
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "estados_tarea" },
         () => {
-          console.log("🔥 [ESTADOS] Cambio detectado");
+        
           forceRefetch();
         }
       )
       .subscribe((status, err) => {
-        console.log("📡 Estado del canal:", status, err || "");
+
         if (status === "SUBSCRIBED") {
-          console.log("✅ Canal realtime CONECTADO");
+       
           isSubscribedRef.current = true;
         } else if (status === "CHANNEL_ERROR") {
           console.error("❌ Error en canal realtime:", err);
           isSubscribedRef.current = false;
         } else if (status === "CLOSED") {
-          console.log("🔌 Canal cerrado");
+        
           isSubscribedRef.current = false;
         }
       });
@@ -127,7 +127,7 @@ export function useTareas(options = {}) {
 
     // Cleanup
     return () => {
-      console.log("🧹 Limpiando canal realtime...");
+      
       isSubscribedRef.current = false;
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);

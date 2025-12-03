@@ -58,7 +58,7 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
       if (error) {
         console.error("Error eliminando archivo:", error);
       } else {
-        console.log("✅ Archivo eliminado:", filePath);
+  
       }
     } catch (error) {
       console.error("Error procesando eliminación:", error);
@@ -169,7 +169,7 @@ export default function BlockNoteEditor({ tareaId, readOnly = false }) {
 
       // Eliminar archivos huérfanos de Storage
       if (deletedImages.length > 0) {
-        console.log("🗑️ Eliminando imágenes huérfanas:", deletedImages.length);
+      
         await Promise.all(
           deletedImages.map((url) => deleteFileFromStorage(url))
         );

@@ -194,7 +194,6 @@ export default function EmpleadosPage() {
       }
 
       const result = await response.json();
-      console.log("Resultado eliminación:", result);
 
       if (!result.success) {
         throw new Error(result.error);

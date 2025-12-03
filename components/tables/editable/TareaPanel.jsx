@@ -545,19 +545,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
               );
             });
         } else if (campo === "empleados_responsables") {
-          // Validar que el usuario actual no sea removido (solo si NO es practicante)
-          const esPracticante =
-            usuarioActual?.roles_empleados?.nombre === "Practicante";
-          if (usuarioActual && !esPracticante) {
-            const tieneUsuarioActual = valor.some(
-              (opt) => opt.value === usuarioActual.id
-            );
-            if (!tieneUsuarioActual) {
-              toast.error("No puedes eliminarte como responsable de la tarea");
-              return;
-            }
-          }
-
+          // En modo creación (nueva tarea), permitir cualquier cambio sin restricciones
           // Convertir array de opciones a array de objetos empleado (solo IDs válidos)
           updates.empleados_responsables = valor
             .filter((opt) => opt.value && opt.value !== null)
@@ -586,19 +574,25 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
         campo === "empleados_designados" ||
         campo === "empleados_responsables"
       ) {
-        // Si es responsables, validar que el usuario actual no sea removido (solo si NO es practicante)
+        // Si es responsables en tarea existente, validar que el usuario actual no sea removido
+        // (solo si NO es practicante Y es el creador de la tarea)
         const esPracticante =
           usuarioActual?.roles_empleados?.nombre === "Practicante";
+        const esCreador = tarea?.empleado_creador_id === usuarioActual?.id;
+
         if (
           campo === "empleados_responsables" &&
           usuarioActual &&
-          !esPracticante
+          !esPracticante &&
+          esCreador
         ) {
           const tieneUsuarioActual = valor.some(
             (opt) => opt.value === usuarioActual.id
           );
           if (!tieneUsuarioActual) {
-            toast.error("No puedes eliminarte como responsable de la tarea");
+            toast.error(
+              "No puedes eliminarte como responsable de la tarea que creaste"
+            );
             return;
           }
         }
@@ -1849,7 +1843,7 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
                     <div className="h-6 w-16 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse"></div>
                     <div className="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse"></div>
                   </div>
-                ) : soloDesignado ? (
+                ) : soloDesignado && tarea?.id ? (
                   <div className="flex items-center gap-2">
                     <EmpleadosBadgeSelector
                       value={datosActuales?.empleados_responsables || []}

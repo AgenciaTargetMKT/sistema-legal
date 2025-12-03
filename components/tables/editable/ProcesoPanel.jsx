@@ -492,7 +492,6 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
       cargarDatos();
       // No llamamos a onUpdate() - el realtime se encarga de actualizar la tabla
     } catch (error) {
-      console.error("❌ Error agregando comentario:", error);
       toast.error("Error al agregar comentario: " + error.message);
     }
   };
@@ -1112,7 +1111,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                           className={clsx(
                             "h-12 px-5 rounded-xl font-medium text-sm flex items-center gap-2 transition-all duration-200 shadow-sm",
                             nuevoComentario.trim()
-                              ? "bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-700 hover:to-primary-600 text-white shadow-primary-200 hover:shadow-md hover:shadow-primary-300 cursor-pointer"
+                              ? "bg-linear-to-r from-primary-600 to-primary-500 hover:from-primary-700 hover:to-primary-600 text-white shadow-primary-200 hover:shadow-md hover:shadow-primary-300 cursor-pointer"
                               : "bg-gray-100 text-gray-400 cursor-not-allowed"
                           )}
                         >

@@ -117,13 +117,6 @@ export const FullCalendarWidget = forwardRef(function FullCalendarWidget(
     try {
       const event = info.event;
 
-      console.log("🔄 Moviendo evento:", {
-        id: event.id,
-        title: event.title,
-        start: event.start,
-        end: event.end,
-        allDay: event.allDay,
-      });
 
       // Actualizar en Google Calendar
       const response = await fetch("/api/calendar/events/update", {

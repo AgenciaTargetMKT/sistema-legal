@@ -33,7 +33,7 @@ export function useTareasRealtime(options = {}) {
         .order("orden", { ascending: true });
 
       if (error) throw error;
-      console.log(`✅ ${data?.length || 0} tareas cargadas`);
+    
       return data || [];
     },
     staleTime: 2 * 60 * 1000, // 2 minutos
@@ -152,7 +152,7 @@ export function useClientesRealtime(options = {}) {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      console.log(`✅ ${data?.length || 0} clientes cargados`);
+     
       return data || [];
     },
     staleTime: 5 * 60 * 1000,
@@ -174,8 +174,7 @@ export function useClientesRealtime(options = {}) {
           table: "clientes",
         },
         (payload) => {
-          console.log("🔥 Realtime - Cambio en clientes:", payload.eventType);
-
+         
           queryClient.setQueryData(["clientes"], (oldData) => {
             if (!oldData) return oldData;
 
@@ -205,7 +204,7 @@ export function useClientesRealtime(options = {}) {
       )
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
-          console.log("✅ Realtime conectado para clientes");
+         
         }
       });
 
@@ -231,7 +230,7 @@ export function useProcesosRealtime(options = {}) {
   const query = useQuery({
     queryKey: ["procesos"],
     queryFn: async () => {
-      console.log("🔄 Cargando procesos desde DB...");
+    
       const { data, error } = await supabase
         .from("procesos")
         .select(
@@ -278,7 +277,7 @@ export function useProcesosRealtime(options = {}) {
         throw error;
       }
 
-      console.log(`✅ ${data?.length || 0} procesos cargados`);
+    
       return data || [];
     },
     staleTime: 3 * 60 * 1000,
@@ -300,7 +299,7 @@ export function useProcesosRealtime(options = {}) {
           table: "procesos",
         },
         (payload) => {
-          console.log("🔥 Realtime - Cambio en procesos:", payload.eventType);
+        
 
           // Para procesos, mejor invalidar y recargar por las relaciones complejas
           setTimeout(() => {
@@ -314,7 +313,7 @@ export function useProcesosRealtime(options = {}) {
       )
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
-          console.log("✅ Realtime conectado para procesos");
+         
         }
       });
 
@@ -380,7 +379,7 @@ export function useNotasRealtime(procesoId, options = {}) {
           filter: `proceso_id=eq.${procesoId}`,
         },
         (payload) => {
-          console.log("📝 Realtime - Cambio en notas:", payload.eventType);
+  
 
           queryClient.setQueryData(["notas", procesoId], (oldData) => {
             if (!oldData) return oldData;
