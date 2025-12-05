@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { formatearFecha, diasRestantes, estaVencido } from "@/lib/utils";
-import { FullCalendarWidget } from "../../../components/features/calendario/full-calendar-widget";
-import { TodayEventsWidget } from "../../../components/features/calendario/today-events-widget";
+import { FullCalendarWidget } from "../../../components/features/calendar/full-calendar-widget";
+import { TodayEventsWidget } from "../../../components/features/calendar/today-events-widget";
 import { Scale, CheckCircle2, AlertTriangle, TrendingUp } from "lucide-react";
 
 export default function DashboardPage() {

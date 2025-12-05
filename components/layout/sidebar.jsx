@@ -32,23 +32,23 @@ const menuItems = [
   */
   {
     name: "Calendario",
-    href: "/calendario",
+    href: "/calendar",
     icon: Calendar,
   },
   {
     name: "Clientes",
-    href: "/clientes",
+    href: "/clients",
     icon: Users,
   },
   {
     name: "Procesos",
-    href: "/procesos",
+    href: "/processes",
     icon: Scale,
   },
 
   {
     name: "Tareas",
-    href: "/tareas",
+    href: "/tasks",
     icon: CheckSquare,
   },
   /*
@@ -59,12 +59,12 @@ const menuItems = [
   },*/
   {
     name: "Empleados",
-    href: "/empleados",
+    href: "/employees",
     icon: UserCog,
   },
   {
     name: "Catálogos",
-    href: "/catalogos",
+    href: "/catalogs",
     icon: Settings,
   },
 ];

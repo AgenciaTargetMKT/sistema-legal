@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Menu, Bell, Search, Calendar, Moon, Sun } from "lucide-react";
-import { CalendarPopover } from "../features/calendario/calendar-popover";
+import { CalendarPopover } from "../features/calendar/calendar-popover";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/components/providers/theme-provider";
 
