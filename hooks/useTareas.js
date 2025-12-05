@@ -18,7 +18,7 @@ export function useTareas(options = {}) {
   const query = useQuery({
     queryKey: ["tareas"],
     queryFn: async () => {
-      console.log("📊 Fetching tareas...");
+    
       const { data, error } = await supabase
         .from("tareas")
         .select(
@@ -34,7 +34,7 @@ export function useTareas(options = {}) {
         .order("orden", { ascending: true });
 
       if (error) throw error;
-      console.log("📊 Tareas fetched:", data?.length);
+    
       return data || [];
     },
     staleTime: 0,
@@ -58,7 +58,7 @@ export function useTareas(options = {}) {
 
     // Crear canal único con timestamp para evitar conflictos
     const channelName = `tareas-realtime-${Date.now()}`;
-    console.log("🔌 Creando canal:", channelName);
+  
 
     const channel = supabase
       .channel(channelName)
@@ -66,10 +66,7 @@ export function useTareas(options = {}) {
         "postgres_changes",
         { event: "*", schema: "public", table: "tareas" },
         (payload) => {
-          console.log(
-            `🔥 [TAREAS ${payload.eventType}]`,
-            payload.new?.nombre || payload.old?.id
-          );
+        
           forceRefetch();
 
           if (payload.eventType === "INSERT") {

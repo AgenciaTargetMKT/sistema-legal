@@ -574,29 +574,6 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
         campo === "empleados_designados" ||
         campo === "empleados_responsables"
       ) {
-        // Si es responsables en tarea existente, validar que el usuario actual no sea removido
-        // (solo si NO es practicante Y es el creador de la tarea)
-        const esPracticante =
-          usuarioActual?.roles_empleados?.nombre === "Practicante";
-        const esCreador = tarea?.empleado_creador_id === usuarioActual?.id;
-
-        if (
-          campo === "empleados_responsables" &&
-          usuarioActual &&
-          !esPracticante &&
-          esCreador
-        ) {
-          const tieneUsuarioActual = valor.some(
-            (opt) => opt.value === usuarioActual.id
-          );
-          if (!tieneUsuarioActual) {
-            toast.error(
-              "No puedes eliminarte como responsable de la tarea que creaste"
-            );
-            return;
-          }
-        }
-
         // Filtrar empleados válidos (con ID no null/undefined)
         const empleadosValidos = valor.filter(
           (opt) => opt.value && opt.value !== null
@@ -651,6 +628,10 @@ export default function TareaPanel({ tarea, isOpen, onClose, onUpdate }) {
         }
 
         toast.success("Actualizado correctamente");
+
+        // 🔥 Llamar onUpdate() para refrescar la tabla
+        onUpdate?.();
+
         return;
       }
 

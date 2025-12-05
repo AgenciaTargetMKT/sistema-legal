@@ -1177,7 +1177,7 @@ export default function ProcesoPanel({ proceso, isOpen, onClose, onUpdate }) {
                                     </span>
                                   </td>
                                   <td className="px-3 py-2.5 text-sm text-gray-700 align-top">
-                                    <p className="whitespace-pre-wrap break-words leading-relaxed">
+                                    <p className="whitespace-pre-wrap wrap-break-word leading-relaxed">
                                       {comentario.contenido}
                                     </p>
                                   </td>

@@ -116,12 +116,10 @@ export default function TareasPage() {
       if (vistaActual === "mis-tareas") {
         const miId = empleado.id;
 
-        // Verificar si soy el creador
-        const esCreador = tarea.empleado_creador_id === miId;
-
         // Verificar si soy responsable (manejar diferentes estructuras de datos)
         const esResponsable =
           Array.isArray(tarea.empleados_responsables) &&
+          tarea.empleados_responsables.length > 0 &&
           tarea.empleados_responsables.some((item) => {
             // La estructura puede ser: { empleado: { id } } o { empleado_id } o { id }
             const empId = item?.empleado?.id || item?.empleado_id || item?.id;
@@ -131,14 +129,16 @@ export default function TareasPage() {
         // Verificar si soy designado (manejar diferentes estructuras de datos)
         const esDesignado =
           Array.isArray(tarea.empleados_designados) &&
+          tarea.empleados_designados.length > 0 &&
           tarea.empleados_designados.some((item) => {
             // La estructura puede ser: { empleado: { id } } o { empleado_id } o { id }
             const empId = item?.empleado?.id || item?.empleado_id || item?.id;
             return empId === miId;
           });
 
-        // 🔒 Solo mostrar si estoy involucrado de alguna forma
-        if (!esCreador && !esResponsable && !esDesignado) {
+        // 🔒 Solo mostrar si soy responsable O designado
+        // Las tareas sin responsables ni designados NO aparecen en "Mis Tareas"
+        if (!esResponsable && !esDesignado) {
           return false;
         }
       }
@@ -214,15 +214,37 @@ export default function TareasPage() {
 
   const getTareasPorEmpleado = (empleadoId) => {
     return tareasFiltradas.filter((tarea) => {
-      return (
-        tarea.empleado_creador_id === empleadoId ||
-        tarea.empleados_responsables?.some(
-          (emp) => emp.empleado?.id === empleadoId
-        ) ||
-        tarea.empleados_designados?.some(
-          (emp) => emp.empleado?.id === empleadoId
-        )
+      // Solo mostrar si el empleado es responsable O designado
+      // NO importa si es el creador
+      const esResponsable = tarea.empleados_responsables?.some(
+        (emp) =>
+          emp.empleado?.id === empleadoId ||
+          emp.empleado_id === empleadoId ||
+          emp.id === empleadoId
       );
+
+      const esDesignado = tarea.empleados_designados?.some(
+        (emp) =>
+          emp.empleado?.id === empleadoId ||
+          emp.empleado_id === empleadoId ||
+          emp.id === empleadoId
+      );
+
+      return esResponsable || esDesignado;
+    });
+  };
+
+  const getTareasSinAsignar = () => {
+    return tareasFiltradas.filter((tarea) => {
+      const tieneResponsables =
+        Array.isArray(tarea.empleados_responsables) &&
+        tarea.empleados_responsables.length > 0;
+      const tieneDesignados =
+        Array.isArray(tarea.empleados_designados) &&
+        tarea.empleados_designados.length > 0;
+
+      // Solo mostrar tareas que NO tienen responsables NI designados
+      return !tieneResponsables && !tieneDesignados;
     });
   };
 
@@ -688,7 +710,8 @@ export default function TareasPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
               >
-                {getEmpleadosConTareas().length === 0 ? (
+                {getEmpleadosConTareas().length === 0 &&
+                getTareasSinAsignar().length === 0 ? (
                   <EmptyState
                     icon={User}
                     title="No hay tareas"
@@ -701,6 +724,67 @@ export default function TareasPage() {
                   />
                 ) : (
                   <div className="space-y-3 relative z-0">
+                    {/* Tareas sin asignar - Primero */}
+                    {getTareasSinAsignar().length > 0 && (
+                      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm hover:shadow-md transition-shadow relative z-0">
+                        <button
+                          onClick={() => toggleEmpleado("sin-asignar")}
+                          className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                          <div className="flex items-center gap-4">
+                            <motion.div
+                              animate={{
+                                rotate: empleadosExpandidos.has("sin-asignar")
+                                  ? 90
+                                  : 0,
+                              }}
+                              transition={{ duration: 0.15 }}
+                            >
+                              <ChevronRight className="h-4 w-4 text-gray-400" />
+                            </motion.div>
+                            <div className="w-10 h-10 rounded-full bg-linear-to-br from-gray-400 to-gray-500 flex items-center justify-center">
+                              <User className="h-5 w-5 text-white" />
+                            </div>
+                            <div className="text-left">
+                              <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                                Sin asignar
+                              </h3>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {getTareasSinAsignar().length}{" "}
+                                {getTareasSinAsignar().length === 1
+                                  ? "tarea"
+                                  : "tareas"}{" "}
+                                sin responsable ni designado
+                              </p>
+                            </div>
+                          </div>
+                          <span className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-semibold rounded-full">
+                            {getTareasSinAsignar().length}
+                          </span>
+                        </button>
+
+                        <AnimatePresence>
+                          {empleadosExpandidos.has("sin-asignar") && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.2 }}
+                              className="border-t border-gray-100 dark:border-gray-700 overflow-hidden"
+                            >
+                              <TareasTable
+                                tareas={getTareasSinAsignar()}
+                                onUpdate={refetch}
+                                onTareaClick={handleEditarTarea}
+                                hideControls={true}
+                              />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
+
+                    {/* Tareas por empleado */}
                     {getEmpleadosConTareas().map((emp) => {
                       const tareasEmpleado = getTareasPorEmpleado(emp.id);
                       const estaExpandido = empleadosExpandidos.has(emp.id);
