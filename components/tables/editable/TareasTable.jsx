@@ -55,7 +55,21 @@ export default function TareasTable({
   );
 
   useEffect(() => {
-    setTareas(initialTareas || []);
+    // Ordenar tareas por fecha de vencimiento: las más antiguas primero
+    // Las tareas sin fecha van al final
+    const tareasOrdenadas = [...(initialTareas || [])].sort((a, b) => {
+      // Si ambas tienen fecha, ordenar por fecha (más antigua primero)
+      if (a.fecha_vencimiento && b.fecha_vencimiento) {
+        return new Date(a.fecha_vencimiento) - new Date(b.fecha_vencimiento);
+      }
+      // Si solo 'a' tiene fecha, va primero
+      if (a.fecha_vencimiento && !b.fecha_vencimiento) return -1;
+      // Si solo 'b' tiene fecha, va primero
+      if (!a.fecha_vencimiento && b.fecha_vencimiento) return 1;
+      // Si ninguna tiene fecha, mantener orden original
+      return 0;
+    });
+    setTareas(tareasOrdenadas);
   }, [initialTareas]);
 
   useEffect(() => {
@@ -1395,10 +1409,25 @@ function DateCell({ value, onChange, disabled = false }) {
             "min-h-6 px-2 py-0.5 rounded transition-all flex items-center text-xs",
             disabled
               ? "cursor-not-allowed text-gray-500 dark:text-gray-400"
-              : "hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-gray-900 dark:text-gray-100"
+              : "hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
           )}
         >
-          {value ? formatearFecha(value) : "Sin fecha"}
+          {value ? (
+            <span className="text-gray-900 dark:text-gray-100">
+              {formatearFecha(value)}
+            </span>
+          ) : (
+            <span
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-white"
+              style={{ backgroundColor: "#FA7575FF" }}
+            >
+              <span
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: "#FFFFFF" }}
+              />
+              Sin fecha
+            </span>
+          )}
         </div>
       )}
     </td>
